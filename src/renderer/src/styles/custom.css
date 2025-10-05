@@ -1,0 +1,78 @@
+/* Custom menu styles */
+.custom-menu .ant-menu-item {
+  transition: all 0.3s ease;
+}
+
+.custom-menu .ant-menu-item:hover {
+  color: #d32f2f !important;
+  background-color: rgba(211, 47, 47, 0.1) !important;
+}
+
+.custom-menu .ant-menu-item-selected {
+  color: #d32f2f !important;
+  background-color: rgba(211, 47, 47, 0.1) !important;
+}
+
+.custom-menu .ant-menu-item-selected::after {
+  border-right-color: #d32f2f !important;
+}
+
+.custom-menu .ant-menu-item:active {
+  background-color: rgba(211, 47, 47, 0.2) !important;
+}
+
+/* Custom tab styles */
+.ant-tabs-tab {
+  transition: color 0.3s ease !important;
+}
+
+.ant-tabs-tab:hover {
+  color: #d32f2f !important;
+}
+
+.ant-tabs-tab.ant-tabs-tab-active .ant-tabs-tab-btn {
+  color: #d32f2f !important;
+  font-weight: 500 !important;
+  transition: none !important;
+}
+
+.ant-tabs-ink-bar {
+  background-color: #d32f2f !important;
+  transition: all 0.3s ease !important;
+}
+
+.ant-tabs-tab-btn:active {
+  color: #d32f2f !important;
+}
+
+/* Custom button styles */
+.ant-btn-primary {
+  background-color: #d32f2f !important;
+  border-color: #d32f2f !important;
+}
+
+.ant-btn-primary:hover {
+  background-color: #b71c1c !important;
+  border-color: #b71c1c !important;
+}
+
+.ant-btn-primary:active {
+  background-color: #8e0000 !important;
+  border-color: #8e0000 !important;
+}
+
+/* Custom table link styles */
+.ant-table-wrapper .ant-table-tbody > tr > td a {
+  color: #d32f2f !important;
+  transition: all 0.3s ease !important;
+  text-decoration: none !important;
+}
+
+.ant-table-wrapper .ant-table-tbody > tr > td a:hover {
+  color: #b71c1c !important;
+  text-decoration: underline !important;
+}
+
+.ant-table-wrapper .ant-table-tbody > tr > td a:active {
+  color: #8e0000 !important;
+} 

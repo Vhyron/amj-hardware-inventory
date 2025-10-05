@@ -1,0 +1,15 @@
+@import './base.css';
+
+@keyframes flicker {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+.flicker-animation {
+  animation: flicker 1.5s infinite;
+}

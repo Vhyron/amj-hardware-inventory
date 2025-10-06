@@ -43,6 +43,11 @@ const mainMenu = [
     key: '/users',
     label: 'Users',
     icon: <HugeiconsIcon icon={UserSharingIcon} />
+  },
+  {
+    key: '/sales',
+    label: 'Sales',
+    icon: <HugeiconsIcon icon={PackageIcon} />
   }
 ]
 

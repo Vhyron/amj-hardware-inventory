@@ -47,6 +47,7 @@ export default function TransactionForm({ open, onClose, mode, selected }: Trans
   const [addingItem, setAddingItem] = useState(false)
   const [selectedStock, setSelectedStock] = useState<any>(null)
   const [editingItem, setEditingItem] = useState<string | null>(null)
+  const [tempItems, setTempItems] = useState<TransactionItemFormData[]>([])
 
   const { user } = useAuthStore()
   const { stocks, fetchStocks } = useStockStore()
@@ -139,17 +140,21 @@ export default function TransactionForm({ open, onClose, mode, selected }: Trans
           onClose()
         }
       } else if (isAddMode) {
-        // Handle create transaction
-        // Initialize with submitted values plus calculated total
+        const values = await transactionForm.validateFields()
         const newTransaction: TransactionFormData = {
           ...values,
-          status: values.status || 'pending', // Ensure status is never undefined
-          totalAmount: 0 // Initial amount is 0, will be updated as items are added
+          status: values.status || 'pending',
+          totalAmount: tempItems.reduce((total, item) => total + item.quantity * item.unitPrice, 0)
         }
 
         const transactionId = await createTransaction(newTransaction as Transaction)
         if (transactionId) {
-          notification.success({ message: 'Transaction created successfully' })
+          // Save all temp items under the new transaction
+          for (const item of tempItems) {
+            await addTransactionItem({ ...item, transactionId })
+          }
+
+          notification.success({ message: 'Transaction created successfully with items' })
           onClose()
         } else {
           notification.error({ message: 'Failed to create transaction' })
@@ -166,24 +171,25 @@ export default function TransactionForm({ open, onClose, mode, selected }: Trans
     try {
       const values = await itemForm.validateFields()
 
-      // Make sure we have the necessary data
-      if (!currentTransaction && !values.transactionId) {
-        notification.error({ message: 'Cannot add item: No transaction ID specified' })
-        return
-      }
-
-      const transactionId = currentTransaction?.id || values.transactionId
       const newItem: TransactionItemFormData = {
-        transactionId,
+        transactionId: currentTransaction?.id || 'temp',
         stockId: values.stockId,
         quantity: values.quantity,
         unitPrice: values.unitPrice,
         unit: values.unit
       }
 
+      if (isAddMode && !currentTransaction) {
+        // Just add to tempItems until transaction is created
+        setTempItems((prev) => [...prev, newItem])
+        notification.success({ message: 'Item added temporarily' })
+        setAddingItem(false)
+        itemForm.resetFields()
+        return
+      }
+
       let success = false
       if (editingItem) {
-        // Update existing item
         success = await updateTransactionItem(editingItem, newItem)
         if (success) {
           notification.success({ message: 'Item updated successfully' })
@@ -192,7 +198,6 @@ export default function TransactionForm({ open, onClose, mode, selected }: Trans
           itemForm.resetFields()
         }
       } else {
-        // Add new item
         const itemId = await addTransactionItem(newItem)
         if (itemId) {
           notification.success({ message: 'Item added successfully' })
@@ -227,10 +232,9 @@ export default function TransactionForm({ open, onClose, mode, selected }: Trans
   const handleStockChange = (value: string) => {
     const selected = stocks.find((s) => s.id === value)
     if (selected) {
-      setSelectedStock(selected)
       itemForm.setFieldsValue({
         unit: selected.unit,
-        unitPrice: selected.unitPrice // Use unit price for sales
+        unitPrice: selected.unitPrice
       })
     }
   }
@@ -304,6 +308,20 @@ export default function TransactionForm({ open, onClose, mode, selected }: Trans
   // Determine if any items exist for the current transaction
   const hasItems = currentItems.length > 0
 
+  // To display the current items for new transaction
+  const displayItems: any[] = (isAddMode ? tempItems : currentItems).map((item, index) => ({
+    key: item.id || `${item.stockId}-${index}`,
+    id: item.id,
+    stockName:
+      'stockName' in item
+        ? (item as any).stockName
+        : stocks.find((s) => s.id === item.stockId)?.name || 'Unknown',
+    quantity: item.quantity,
+    unit: item.unit,
+    unitPrice: item.unitPrice,
+    total: item.quantity * item.unitPrice
+  }))
+
   return (
     <Modal
       title={modalTitle()}
@@ -348,7 +366,7 @@ export default function TransactionForm({ open, onClose, mode, selected }: Trans
               label="Status"
               rules={[{ required: true, message: 'Please select status' }]}
             >
-              <Select disabled={isAddMode}>
+              <Select>
                 <Option value="pending">Pending</Option>
                 <Option value="completed">Completed</Option>
                 <Option value="cancelled">Cancelled</Option>
@@ -362,7 +380,7 @@ export default function TransactionForm({ open, onClose, mode, selected }: Trans
       </Form>
 
       {/* Show Transaction Items Section for View/Edit/Delete modes */}
-      {(isViewMode || isEditMode || isDeleteMode) && (
+      {(isViewMode || isEditMode || isDeleteMode || isAddMode) && (
         <div style={{ marginTop: 24 }}>
           <Divider orientation="left">Transaction Items</Divider>
           <div
@@ -390,7 +408,7 @@ export default function TransactionForm({ open, onClose, mode, selected }: Trans
           </div>
           <Table
             columns={itemColumns}
-            dataSource={currentItems.map((item) => ({ ...item, key: item.id }))}
+            dataSource={displayItems}
             size="small"
             bordered
             pagination={false}
@@ -401,7 +419,14 @@ export default function TransactionForm({ open, onClose, mode, selected }: Trans
                     <strong>Total Amount</strong>
                   </Table.Summary.Cell>
                   <Table.Summary.Cell index={1} colSpan={2}>
-                    <strong>{formatCurrency(calculateTotalAmount())}</strong>
+                    <strong>
+                      {formatCurrency(
+                        (isAddMode ? tempItems : currentItems).reduce(
+                          (total, item) => total + item.quantity * item.unitPrice,
+                          0
+                        )
+                      )}
+                    </strong>
                   </Table.Summary.Cell>
                 </Table.Summary.Row>
               </Table.Summary>
@@ -449,12 +474,12 @@ export default function TransactionForm({ open, onClose, mode, selected }: Trans
                 optionFilterProp="children"
                 filterOption={(input, option) =>
                   (option?.children as unknown as string)
-                  ?.toLowerCase()
-                  .includes(input.toLowerCase())
+                    ?.toLowerCase()
+                    .includes(input.toLowerCase())
                 }
               >
                 {stocks
-                  .filter(stock => stock.quantity > 0) // Filter out stocks with zero quantity
+                  .filter((stock) => stock.quantity > 0) // Filter out stocks with zero quantity
                   .map((stock) => (
                     <Option key={stock.id} value={stock.id}>
                       {stock.name} - {stock.sku} ({stock.quantity} {stock.unit} available)
@@ -511,11 +536,10 @@ export default function TransactionForm({ open, onClose, mode, selected }: Trans
         </Modal>
       )}
 
-      {/* Create Item UI for adding mode when no items exist yet */}
-      {isAddMode &&  (
+      {isAddMode && tempItems.length === 0 && (
         <div style={{ marginTop: 24, textAlign: 'center' }}>
-          <Title level={5}>Please save the transaction first to add items</Title>
-          <p>After creating the transaction, you can add items to it.</p>
+          <Title level={5}>No items added yet</Title>
+          <p>Click “Add Item” to add your first product to this transaction.</p>
         </div>
       )}
 

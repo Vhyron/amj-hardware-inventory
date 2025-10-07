@@ -1,9 +1,13 @@
 import { transactionsRepo, Transaction, TransactionItem } from './transactions-repo'
 
 export class TransactionsService {
-  getAllTransactions = async () => {
+  getAllTransactions(): {
+    success: boolean
+    transactions?: Transaction[]
+    message?: string
+  } {
     try {
-      const transactions = await transactionsRepo.getAll()
+      const transactions = transactionsRepo.getAll()
       return { success: true, transactions }
     } catch (error) {
       console.error('Error in TransactionsService.getAllTransactions:', error)

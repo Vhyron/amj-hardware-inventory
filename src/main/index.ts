@@ -55,6 +55,14 @@ function createWindow(): void {
 // initialization and is ready to create browser windows.
 // Some APIs can only be used after this event occurs.
 app.whenReady().then(() => {
+  try {
+    const dbManager = DatabaseManager.getInstance()
+    console.log('✅ Database initialized successfully.')
+    console.log('📂 Database path:', app.getPath('userData'))
+  } catch (error) {
+    console.error('❌ Failed to initialize database:', error)
+  }
+
   // Set app user model id for windows
   electronApp.setAppUserModelId('com.electron')
 

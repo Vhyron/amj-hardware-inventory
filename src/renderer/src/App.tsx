@@ -5,6 +5,7 @@ import Dashboard from './pages/Dashboard'
 import DashboardLayout from './components/DashboardLayout'
 import Stocks from './pages/Stocks'
 import Supply from './pages/Supply'
+import Sales from './pages/Sales'
 import Transactions from './pages/Transactions'
 import Users from './pages/Users'
 import NotFound from './components/NotFound'
@@ -59,6 +60,7 @@ export default function App() {
             <Route path="stocks" element={<Stocks />} />
             <Route path="supply" element={<Supply />} />
             <Route path="transactions" element={<Transactions />} />
+            <Route path="sales" element={<Sales />} />
             <Route path="users" element={<Users />} />
             <Route path="account" element={<Account />} />
           </Route>

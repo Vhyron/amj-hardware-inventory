@@ -1,20 +1,20 @@
+import { permissionOptions } from '@/renderer/src/lib/permissions'
+import { FormMode } from '@/renderer/src/lib/types'
+import { generatePrefixedUUID } from '@/renderer/src/lib/uuid'
+import { useUserStore } from '@/renderer/src/store/userStore'
 import {
+  Button,
+  Checkbox,
+  Col,
   Form,
   Input,
-  Button,
   Modal,
-  Row,
-  Col,
   Popconfirm,
-  Typography,
+  Row,
   Select,
-  Checkbox
+  Typography
 } from 'antd'
-import { generatePrefixedUUID } from '@/renderer/src/lib/uuid'
-import { FormMode } from '@/renderer/src/lib/types'
 import { useEffect, useState } from 'react'
-import { useUserStore } from '@/renderer/src/store/userStore'
-import { permissionOptions } from '@/renderer/src/lib/permissions'
 
 const { Text } = Typography
 const { Option } = Select
@@ -79,7 +79,7 @@ export default function UsersForm({ user, mode, open, onClose, onSuccess }: Prop
       const values = await form.validateFields()
       const currentDate = new Date().toISOString()
 
-      // If admin, grant all permissions
+      // If admin or super_admin, grant all permissions
       const permissions =
         values.role === 'admin' || values.role === 'super_admin'
           ? ['*']
@@ -132,7 +132,7 @@ export default function UsersForm({ user, mode, open, onClose, onSuccess }: Prop
 
   const handleRoleChange = (value: string) => {
     setSelectedRole(value)
-    // Clear permissions when switching to admin
+    // Clear permissions when switching to admin or super_admin
     if (value === 'admin' || value === 'super_admin') {
       form.setFieldValue('permissions', ['*'])
     } else {
@@ -269,7 +269,7 @@ export default function UsersForm({ user, mode, open, onClose, onSuccess }: Prop
           </Select>
         </Form.Item>
 
-        {selectedRole !== 'admin' && (
+        {selectedRole !== 'admin' && selectedRole !== 'super_admin' && (
           <Form.Item name="permissions" label="Permissions">
             <Checkbox.Group
               options={permissionOptions}
@@ -282,9 +282,11 @@ export default function UsersForm({ user, mode, open, onClose, onSuccess }: Prop
           </Form.Item>
         )}
 
-        {selectedRole === 'admin' && (
+        {(selectedRole === 'admin' || selectedRole === 'super_admin') && (
           <Form.Item label="Permissions">
-            <Text type="success">Admin has all permissions (*)</Text>
+            <Text type="success">
+              {selectedRole === 'admin' ? 'Admin' : 'Super Admin'} has all permissions (*)
+            </Text>
           </Form.Item>
         )}
 

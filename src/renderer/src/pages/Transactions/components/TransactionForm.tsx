@@ -69,15 +69,12 @@ export default function TransactionForm({ open, onClose, mode, selected }: Trans
   const isDeleteMode = mode === 'delete'
   const isAddMode = mode === 'add'
 
-  // Fetch stocks for dropdown
   useEffect(() => {
     fetchStocks()
   }, [fetchStocks])
 
-  // Fetch transaction details when selected transaction changes
   useEffect(() => {
     if (open && selected) {
-      // Fetch transaction details if in edit, view, or delete mode
       if (isEditMode || isViewMode || isDeleteMode) {
         fetchTransactionById(selected.id)
         fetchTransactionItems(selected.id)
@@ -93,11 +90,9 @@ export default function TransactionForm({ open, onClose, mode, selected }: Trans
     fetchTransactionItems
   ])
 
-  // Reset forms when modal opens/closes or selected item changes
   useEffect(() => {
     if (open) {
       if (currentTransaction && (isEditMode || isViewMode || isDeleteMode)) {
-        // Populate form with selected transaction data
         transactionForm.setFieldsValue({
           customerName: currentTransaction.customerName,
           referenceNo: currentTransaction.referenceNo,
@@ -105,7 +100,6 @@ export default function TransactionForm({ open, onClose, mode, selected }: Trans
           notes: currentTransaction.notes
         })
       } else if (isAddMode) {
-        // Reset form for add mode with default values
         transactionForm.resetFields()
         transactionForm.setFieldsValue({
           status: 'pending'
@@ -126,14 +120,12 @@ export default function TransactionForm({ open, onClose, mode, selected }: Trans
       let success = false
 
       if (isDeleteMode && selected) {
-        // Handle delete transaction
         success = await deleteTransaction(selected.id)
         if (success) {
           notification.success({ message: 'Transaction deleted successfully' })
           onClose()
         }
       } else if (isEditMode && currentTransaction) {
-        // Handle update transaction
         success = await updateTransaction(currentTransaction.id, values)
         if (success) {
           notification.success({ message: 'Transaction updated successfully' })
@@ -149,7 +141,6 @@ export default function TransactionForm({ open, onClose, mode, selected }: Trans
 
         const transactionId = await createTransaction(newTransaction as Transaction)
         if (transactionId) {
-          // Save all temp items under the new transaction
           for (const item of tempItems) {
             await addTransactionItem({ ...item, transactionId })
           }
@@ -180,11 +171,25 @@ export default function TransactionForm({ open, onClose, mode, selected }: Trans
       }
 
       if (isAddMode && !currentTransaction) {
-        // Just add to tempItems until transaction is created
-        setTempItems((prev) => [...prev, newItem])
-        notification.success({ message: 'Item added temporarily' })
+        if (editingItem) {
+          setTempItems((prev) =>
+            prev.map((item, index) => {
+              const itemKey = `${item.stockId}-${index}`
+              if (item.stockId === editingItem || itemKey === editingItem) {
+                return { ...item, quantity: newItem.quantity, unitPrice: newItem.unitPrice, unit: newItem.unit }
+              }
+              return item
+            })
+          )
+          notification.success({ message: 'Item updated successfully' })
+          setEditingItem(null)
+        } else {
+          setTempItems((prev) => [...prev, newItem])
+          notification.success({ message: 'Item added temporarily' })
+        }
         setAddingItem(false)
         itemForm.resetFields()
+        setSelectedStock(null)
         return
       }
 
@@ -193,28 +198,34 @@ export default function TransactionForm({ open, onClose, mode, selected }: Trans
         success = await updateTransactionItem(editingItem, newItem)
         if (success) {
           notification.success({ message: 'Item updated successfully' })
-          setAddingItem(false)
-          setEditingItem(null)
-          itemForm.resetFields()
         }
       } else {
         const itemId = await addTransactionItem(newItem)
         if (itemId) {
           notification.success({ message: 'Item added successfully' })
-          setAddingItem(false)
-          itemForm.resetFields()
         }
       }
+
+      setAddingItem(false)
+      setEditingItem(null)
+      itemForm.resetFields()
+      setSelectedStock(null)
+      if (currentTransaction?.id) fetchTransactionItems(currentTransaction.id)
     } catch (error) {
       console.error('Item form validation error:', error)
     }
   }
 
-  const handleEditItem = (item: TransactionItem) => {
-    setEditingItem(item.id)
+  const handleEditItem = (item: TransactionItem | any) => {
+    const itemId = item.id || item.key
+    setEditingItem(itemId)
     setAddingItem(true)
+
+    const stock = stocks.find((s) => s.id === item.stockId)
+    setSelectedStock(stock || null)
+
     itemForm.setFieldsValue({
-      stockId: item.stockId,
+      stockId: item.stockId, 
       quantity: item.quantity,
       unit: item.unit,
       unitPrice: item.unitPrice
@@ -222,16 +233,26 @@ export default function TransactionForm({ open, onClose, mode, selected }: Trans
   }
 
   const handleDeleteItem = async (itemId: string) => {
+    if (isAddMode && !currentTransaction) {
+      setTempItems((prev) => prev.filter((item, index) => {
+        const itemKey = `${item.stockId}-${index}`
+        return item.stockId !== itemId && itemKey !== itemId
+      }))
+      notification.success({ message: 'Item removed from temporary list' })
+      return
+    }
+
     const success = await deleteTransactionItem(itemId)
     if (success) {
       notification.success({ message: 'Item removed successfully' })
+      if (currentTransaction?.id) fetchTransactionItems(currentTransaction.id)
     }
   }
 
-  // Handle stock selection
   const handleStockChange = (value: string) => {
     const selected = stocks.find((s) => s.id === value)
     if (selected) {
+      setSelectedStock(selected)
       itemForm.setFieldsValue({
         unit: selected.unit,
         unitPrice: selected.unitPrice
@@ -264,13 +285,13 @@ export default function TransactionForm({ open, onClose, mode, selected }: Trans
     {
       title: 'Total',
       key: 'total',
-      render: (_: any, record: TransactionItem) =>
+      render: (_: any, record: any) =>
         formatCurrency(record.quantity * record.unitPrice)
     },
     {
       title: 'Actions',
       key: 'actions',
-      render: (_: any, record: TransactionItem) =>
+      render: (_: any, record: any) =>
         !isViewMode && !isDeleteMode ? (
           <Space>
             <Button icon={<EditOutlined />} type="text" onClick={() => handleEditItem(record)} />
@@ -278,7 +299,7 @@ export default function TransactionForm({ open, onClose, mode, selected }: Trans
               icon={<DeleteOutlined />}
               type="text"
               danger
-              onClick={() => handleDeleteItem(record.id)}
+              onClick={() => handleDeleteItem(record.key)}
             />
           </Space>
         ) : null
@@ -305,22 +326,24 @@ export default function TransactionForm({ open, onClose, mode, selected }: Trans
     return 'Create New Transaction'
   }
 
-  // Determine if any items exist for the current transaction
   const hasItems = currentItems.length > 0
 
-  // To display the current items for new transaction
-  const displayItems: any[] = (isAddMode ? tempItems : currentItems).map((item, index) => ({
-    key: item.id || `${item.stockId}-${index}`,
-    id: item.id,
-    stockName:
-      'stockName' in item
-        ? (item as any).stockName
-        : stocks.find((s) => s.id === item.stockId)?.name || 'Unknown',
-    quantity: item.quantity,
-    unit: item.unit,
-    unitPrice: item.unitPrice,
-    total: item.quantity * item.unitPrice
-  }))
+  const displayItems: any[] = (isAddMode ? tempItems : currentItems).map((item, index) => {
+    const itemKey = item.id || `${item.stockId}-${index}`
+    return {
+      key: itemKey,
+      id: item.id,
+      stockId: item.stockId,
+      stockName:
+        'stockName' in item
+          ? (item as any).stockName
+          : stocks.find((s) => s.id === item.stockId)?.name || 'Unknown',
+      quantity: item.quantity,
+      unit: item.unit,
+      unitPrice: item.unitPrice,
+      total: item.quantity * item.unitPrice
+    }
+  })
 
   return (
     <Modal
@@ -345,7 +368,6 @@ export default function TransactionForm({ open, onClose, mode, selected }: Trans
         )
       ]}
     >
-      {/* Transaction Form */}
       <Form form={transactionForm} layout="vertical" disabled={isViewMode || isDeleteMode}>
         <Row gutter={16}>
           <Col span={12}>
@@ -379,7 +401,6 @@ export default function TransactionForm({ open, onClose, mode, selected }: Trans
         </Form.Item>
       </Form>
 
-      {/* Show Transaction Items Section for View/Edit/Delete modes */}
       {(isViewMode || isEditMode || isDeleteMode || isAddMode) && (
         <div style={{ marginTop: 24 }}>
           <Divider orientation="left">Transaction Items</Divider>
@@ -400,6 +421,7 @@ export default function TransactionForm({ open, onClose, mode, selected }: Trans
                   setAddingItem(true)
                   setEditingItem(null)
                   itemForm.resetFields()
+                  setSelectedStock(null)
                 }}
               >
                 Add Item
@@ -435,7 +457,6 @@ export default function TransactionForm({ open, onClose, mode, selected }: Trans
         </div>
       )}
 
-      {/* Item Form (Add/Edit items) */}
       {addingItem && (isEditMode || isAddMode) && (
         <Modal
           title={editingItem ? 'Edit Item' : 'Add Item'}
@@ -444,6 +465,7 @@ export default function TransactionForm({ open, onClose, mode, selected }: Trans
             setAddingItem(false)
             setEditingItem(null)
             itemForm.resetFields()
+            setSelectedStock(null)
           }}
           footer={[
             <Button
@@ -452,6 +474,7 @@ export default function TransactionForm({ open, onClose, mode, selected }: Trans
                 setAddingItem(false)
                 setEditingItem(null)
                 itemForm.resetFields()
+                setSelectedStock(null)
               }}
             >
               Cancel
@@ -471,6 +494,7 @@ export default function TransactionForm({ open, onClose, mode, selected }: Trans
                 placeholder="Select product"
                 onChange={handleStockChange}
                 showSearch
+                disabled={!!editingItem}
                 optionFilterProp="children"
                 filterOption={(input, option) =>
                   (option?.children as unknown as string)
@@ -479,7 +503,7 @@ export default function TransactionForm({ open, onClose, mode, selected }: Trans
                 }
               >
                 {stocks
-                  .filter((stock) => stock.quantity > 0) // Filter out stocks with zero quantity
+                  .filter((stock) => stock.quantity > 0)
                   .map((stock) => (
                     <Option key={stock.id} value={stock.id}>
                       {stock.name} - {stock.sku} ({stock.quantity} {stock.unit} available)
@@ -539,11 +563,10 @@ export default function TransactionForm({ open, onClose, mode, selected }: Trans
       {isAddMode && tempItems.length === 0 && (
         <div style={{ marginTop: 24, textAlign: 'center' }}>
           <Title level={5}>No items added yet</Title>
-          <p>Click “Add Item” to add your first product to this transaction.</p>
+          <p>Click "Add Item" to add your first product to this transaction.</p>
         </div>
       )}
 
-      {/* Warning for delete mode */}
       {isDeleteMode && (
         <div style={{ marginTop: 16 }}>
           <Typography.Text type="danger" strong>

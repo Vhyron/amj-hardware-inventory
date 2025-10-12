@@ -24,4 +24,8 @@ export class StocksService {
   deleteStock(id: string): boolean {
     return stocksRepo.deleteStock(id)
   }
+
+  updateStockQuantity(stockId: string, quantity: number, operation: 'add' | 'subtract'): boolean {
+    return stocksRepo.updateQuantity(stockId, quantity, operation)
+  }
 }

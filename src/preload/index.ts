@@ -40,7 +40,9 @@ try {
         ipcRenderer.invoke('stocks:getByName', name, excludeId),
       add: (stock: any) => ipcRenderer.invoke('stocks:add', stock),
       update: (stock: any) => ipcRenderer.invoke('stocks:update', stock),
-      delete: (id: string) => ipcRenderer.invoke('stocks:delete', id)
+      delete: (id: string) => ipcRenderer.invoke('stocks:delete', id),
+      updateQuantity: (stockId: string, quantity: number, operation: 'add' | 'subtract') => 
+    ipcRenderer.invoke('stocks:updateQuantity', stockId, quantity, operation)
     },
     // Categories IPC methods
     categories: {

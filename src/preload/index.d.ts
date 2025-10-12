@@ -45,8 +45,8 @@ declare global {
           }
         }>
         logout: () => boolean
-        getUser: (id) => Promise<User | null>,
-        refreshToken: (id: string) =>  Promise<{ success: boolean; message?: string }>
+        getUser: (id) => Promise<User | null>
+        refreshToken: (id: string) => Promise<{ success: boolean; message?: string }>
       }
       users: {
         getAll: () => User[]
@@ -56,20 +56,29 @@ declare global {
         update: (id: string, user: User) => Promise<boolean>
         delete: (id: string) => Promise<boolean>
       }
-      // Stocks IPC methods
       stocks: {
         getAll: () => Promise<{
           success: boolean
           stocks: Stock[]
         }>
-        getById: (id: string) => Promise<{  success: boolean; stock: Stock | null; message?: string }>
+        getById: (
+          id: string
+        ) => Promise<{ success: boolean; stock: Stock | null; message?: string }>
         getByName: (name: string, excludeId?: string) => Promise<boolean>
         add: (
           stock: Stock
         ) => Promise<{ success: boolean; stockId?: number | null; message?: string }>
         update: (stock: Stock) => Promise<{ success: boolean; message?: string }>
         delete: (id: string) => Promise<{ success: boolean; message?: string }>
+
+        // ✅ ADD THIS FUNCTION BELOW
+        updateQuantity: (
+          stockId: string,
+          quantity: number,
+          operation: 'add' | 'subtract'
+        ) => Promise<{ success: boolean; message?: string }>
       }
+
       // Categories IPC methods
       categories: {
         getAll: () => Promise<{
@@ -83,7 +92,6 @@ declare global {
         update: (category: Category) => Promise<{ success: boolean; message?: string }>
         delete: (id: string) => Promise<{ success: boolean; message?: string }>
       }
-      // Suppliers IPC methods
       suppliers: {
         getAll: () => Promise<{
           success: boolean
@@ -182,9 +190,9 @@ declare global {
         }>
         delete: (id: string) => Promise<{ success: boolean; message?: string }>
         deleteItem: (id: string) => Promise<{ success: boolean; message?: string }>
-      },
+      }
       log: {
-        create: (log: ActivityLog) => { success: boolean; message?: string; }
+        create: (log: ActivityLog) => { success: boolean; message?: string }
         getAll: () => { success: boolean; message?: string; logs?: ActivityLog[] }
       }
     }

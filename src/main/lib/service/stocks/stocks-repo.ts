@@ -145,6 +145,58 @@ export class StocksRepository {
       return false
     }
   }
+
+  /**
+   * Update stock quantity by adding or subtracting
+   * Also updates the stock status based on quantity and reorder point
+   */
+  updateQuantity(stockId: string, quantity: number, operation: 'add' | 'subtract'): boolean {
+    try {
+      assert(stockId, 'Stock ID is required')
+      assert(quantity >= 0, 'Quantity must be non-negative')
+
+      // First, get the current stock
+      const stock = this.getById(stockId)
+      if (!stock) {
+        throw new Error(`Stock with ID ${stockId} not found`)
+      }
+
+      // Calculate new quantity
+      let newQuantity = stock.quantity
+      if (operation === 'add') {
+        newQuantity += quantity
+      } else if (operation === 'subtract') {
+        newQuantity -= quantity
+        // Prevent negative quantity
+        if (newQuantity < 0) {
+          throw new Error(`Insufficient stock. Available: ${stock.quantity}, Requested: ${quantity}`)
+        }
+      }
+
+      // Calculate new status based on quantity and reorder point
+      let newStatus: 'In Stock' | 'Out of Stock' | 'Critical Low'
+      if (newQuantity <= 0) {
+        newStatus = 'Out of Stock'
+      } else if (stock.reorderPoint && newQuantity <= stock.reorderPoint) {
+        newStatus = 'Critical Low'
+      } else {
+        newStatus = 'In Stock'
+      }
+
+      // Update the stock with new quantity and status
+      const stmt = this.db.prepare(
+        'UPDATE stocks SET quantity = ?, status = ? WHERE id = ?'
+      )
+      const result = stmt.run(newQuantity, newStatus, stockId)
+
+      console.log(`Stock ${stockId} quantity updated: ${stock.quantity} -> ${newQuantity} (${operation})`)
+
+      return result.changes > 0
+    } catch (error: any) {
+      console.error('Error updateQuantity:', error)
+      throw error
+    }
+  }
 }
 
 export const stocksRepo = new StocksRepository()

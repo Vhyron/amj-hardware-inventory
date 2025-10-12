@@ -88,4 +88,20 @@ export function setupStocksIPC() {
       return { success: false, message: 'Failed to delete stock' }
     }
   })
+
+  // New handler for updating stock quantity (add or subtract)
+  ipcMain.handle('stocks:updateQuantity', async (_, stockId: string, quantity: number, operation: 'add' | 'subtract') => {
+    try {
+      const success = await stocksService.updateStockQuantity(stockId, quantity, operation)
+      
+      if (success) {
+        return { success: true, message: 'Stock quantity updated successfully' }
+      } else {
+        return { success: false, message: 'Failed to update stock quantity' }
+      }
+    } catch (error: any) {
+      console.error('Error updating stock quantity:', error)
+      return { success: false, message: error.message || 'Failed to update stock quantity' }
+    }
+  })
 }

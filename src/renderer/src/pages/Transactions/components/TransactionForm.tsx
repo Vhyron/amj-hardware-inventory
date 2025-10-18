@@ -11,13 +11,11 @@ import {
   Col,
   InputNumber,
   Divider,
-  notification,
-  Tag
+  notification
 } from 'antd'
 import { useState, useEffect } from 'react'
 import { FormMode } from '@/renderer/src/lib/types'
 import { useTransactionStore } from '@/renderer/src/store/transactionStore'
-import { useAuthStore } from '@/renderer/src/store/authStore'
 import { useStockStore } from '@/renderer/src/store/stockStore'
 import {
   Transaction,
@@ -48,7 +46,6 @@ export default function TransactionForm({ open, onClose, mode, selected }: Trans
   const [selectedStock, setSelectedStock] = useState<any>(null)
   const [editingItem, setEditingItem] = useState<string | null>(null)
 
-  const { user } = useAuthStore()
   const { stocks, fetchStocks } = useStockStore()
   const {
     createTransaction,
@@ -348,7 +345,7 @@ export default function TransactionForm({ open, onClose, mode, selected }: Trans
               label="Status"
               rules={[{ required: true, message: 'Please select status' }]}
             >
-              <Select disabled={isAddMode}>
+              <Select disabled={isAddMode || isViewMode}>
                 <Option value="pending">Pending</Option>
                 <Option value="completed">Completed</Option>
                 <Option value="cancelled">Cancelled</Option>
@@ -449,12 +446,12 @@ export default function TransactionForm({ open, onClose, mode, selected }: Trans
                 optionFilterProp="children"
                 filterOption={(input, option) =>
                   (option?.children as unknown as string)
-                  ?.toLowerCase()
-                  .includes(input.toLowerCase())
+                    ?.toLowerCase()
+                    .includes(input.toLowerCase())
                 }
               >
                 {stocks
-                  .filter(stock => stock.quantity > 0) // Filter out stocks with zero quantity
+                  .filter((stock) => stock.quantity > 0) // Filter out stocks with zero quantity
                   .map((stock) => (
                     <Option key={stock.id} value={stock.id}>
                       {stock.name} - {stock.sku} ({stock.quantity} {stock.unit} available)
@@ -512,7 +509,7 @@ export default function TransactionForm({ open, onClose, mode, selected }: Trans
       )}
 
       {/* Create Item UI for adding mode when no items exist yet */}
-      {isAddMode &&  (
+      {isAddMode && (
         <div style={{ marginTop: 24, textAlign: 'center' }}>
           <Title level={5}>Please save the transaction first to add items</Title>
           <p>After creating the transaction, you can add items to it.</p>

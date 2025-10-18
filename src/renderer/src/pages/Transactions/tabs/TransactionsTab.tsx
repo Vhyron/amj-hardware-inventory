@@ -1,7 +1,7 @@
 import SearchInput from '@/renderer/src/components/SearchInput'
 import TableComponent, { generateColumns, TableActionOption } from '@/renderer/src/components/Table'
 import { FormMode } from '@/renderer/src/lib/types'
-import { Flex, Tag } from 'antd'
+import { Flex, Tag, Button, Tooltip } from 'antd'
 import { useEffect, useMemo, useState } from 'react'
 import { EditOutlined, DeleteOutlined } from '@ant-design/icons'
 import { useTransactionStore } from '@/renderer/src/store/transactionStore'
@@ -23,7 +23,7 @@ export default function TransactionsTab({ onAction }: Props) {
     pageSize: 10,
     showSizeChanger: false,
     onChange: (page: number, pageSize: number) => {
-      setPagination(prev => ({
+      setPagination((prev) => ({
         ...prev,
         current: page,
         pageSize: pageSize
@@ -51,17 +51,21 @@ export default function TransactionsTab({ onAction }: Props) {
   const handleAction = (record: Transaction, actionType: string | number) => {
     if (typeof actionType === 'string') {
       if (actionType === 'edit' && !hasPermission(user?.permissions, 'transactions:edit')) return
-      if (actionType === 'delete' && !hasPermission(user?.permissions, 'transactions:delete')) return
+      if (actionType === 'delete' && !hasPermission(user?.permissions, 'transactions:delete'))
+        return
 
       onAction(record, actionType as FormMode)
     }
   }
 
-  // Define action options
-  const getOptions = () => {
+  const getOptions = (transaction?: Transaction) => {
     const options: TableActionOption[] = []
 
-    if (hasPermission(user?.permissions, 'transactions:edit')) {
+    if (
+      (hasPermission(user?.permissions, 'transactions:edit') &&
+        transaction?.status !== 'cancelled') ||
+      transaction?.status === 'completed'
+    ) {
       options.push({
         label: 'Edit',
         key: 'edit',
@@ -81,11 +85,10 @@ export default function TransactionsTab({ onAction }: Props) {
   }
 
   const columns = () => {
-    // Get base columns from the generator
     const baseColumns = generateColumns<Transaction>(
       filteredTransactions,
       handleAction,
-      getOptions(),
+      undefined, // undefined action to manually add later
       ['id', 'createdAt', 'customerName', 'totalAmount', 'status'],
       'id'
     )
@@ -104,7 +107,9 @@ export default function TransactionsTab({ onAction }: Props) {
           style={{
             cursor: hasPermission(user?.permissions, 'transactions:view') ? 'pointer' : 'default',
             color: hasPermission(user?.permissions, 'transactions:view') ? undefined : 'inherit',
-            textDecoration: hasPermission(user?.permissions, 'transactions:view') ? undefined : 'none'
+            textDecoration: hasPermission(user?.permissions, 'transactions:view')
+              ? undefined
+              : 'none'
           }}
         >
           {text}
@@ -112,21 +117,18 @@ export default function TransactionsTab({ onAction }: Props) {
       )
     }
 
-    // Add custom rendering for date column
     const dateColumnIndex = baseColumns.findIndex((col) => col.key === 'createdAt')
     if (dateColumnIndex !== -1) {
       baseColumns[dateColumnIndex].title = 'Transaction Date'
       baseColumns[dateColumnIndex].render = (date: string) => formatDate(date)
     }
 
-    // Add custom rendering for total column
     const totalColumnIndex = baseColumns.findIndex((col) => col.key === 'totalAmount')
     if (totalColumnIndex !== -1) {
       baseColumns[totalColumnIndex].title = 'Total'
       baseColumns[totalColumnIndex].render = (total: number) => formatCurrency(total)
     }
 
-    // Add custom rendering for status column
     const statusColumnIndex = baseColumns.findIndex((col) => col.key === 'status')
     if (statusColumnIndex !== -1) {
       baseColumns[statusColumnIndex].render = (status: string) => {
@@ -140,6 +142,30 @@ export default function TransactionsTab({ onAction }: Props) {
         return <Tag color={color}>{statusDisplay}</Tag>
       }
     }
+
+    // Add custom actions column
+    baseColumns.push({
+      dataIndex: 'actions',
+      key: 'actions',
+      title: 'Actions',
+      render: (_, record: Transaction) => {
+        const options = getOptions(record)
+        return (
+          <div style={{ display: 'flex', justifyContent: 'center' }}>
+            {options?.map((option: TableActionOption, i: number) => (
+              <Tooltip key={i} title={option.label}>
+                <Button
+                  icon={option.icon}
+                  onClick={() => handleAction(record, option.key)}
+                  style={{ marginRight: 10 }}
+                  disabled={option.disabled}
+                />
+              </Tooltip>
+            ))}
+          </div>
+        )
+      }
+    })
 
     return baseColumns
   }

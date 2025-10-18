@@ -345,7 +345,7 @@ export default function TransactionForm({ open, onClose, mode, selected }: Trans
               label="Status"
               rules={[{ required: true, message: 'Please select status' }]}
             >
-              <Select disabled={isAddMode || isViewMode}>
+              <Select disabled={isAddMode || isViewMode || isDeleteMode}>
                 <Option value="pending">Pending</Option>
                 <Option value="completed">Completed</Option>
                 <Option value="cancelled">Cancelled</Option>

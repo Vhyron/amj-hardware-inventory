@@ -62,9 +62,9 @@ export default function TransactionsTab({ onAction }: Props) {
     const options: TableActionOption[] = []
 
     if (
-      (hasPermission(user?.permissions, 'transactions:edit') &&
-        transaction?.status !== 'cancelled') ||
-      transaction?.status === 'completed'
+      hasPermission(user?.permissions, 'transactions:edit') &&
+      transaction?.status !== 'cancelled' &&
+      transaction?.status !== 'completed'
     ) {
       options.push({
         label: 'Edit',

@@ -113,7 +113,7 @@ export default function DashboardLayout() {
             }}
           />
           <Typography.Text style={{ fontSize: 17, whiteSpace: 'nowrap', fontWeight: 500 }}>
-            Fagan Glass Inventory
+            AMJ Hardware Inventory
           </Typography.Text>
         </div>
 

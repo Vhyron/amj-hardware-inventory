@@ -1,11 +1,12 @@
 import Database from 'better-sqlite3'
-import { usersSchema } from './schemas/users'
-import { categoriesSchema } from './schemas/categories'
-import { stocksSchema } from './schemas/stocks'
-import { suppliersSchema } from './schemas/supplier'
-import { supplyOrdersSchema, supplyOrderItemsSchema } from './schemas/supplyOrder'
-import { transactionItemsSchema, transactionSchema } from './schemas/transactions'
-import { activityLogsSchema } from './schemas/activityLogs'
+import { usersSchema } from './schemas/users.ts'
+import { categoriesSchema } from './schemas/categories.ts'
+import { stocksSchema } from './schemas/stocks.ts'
+import { suppliersSchema } from './schemas/supplier.ts'
+import { supplyOrdersSchema, supplyOrderItemsSchema } from './schemas/supplyOrder.ts'
+import { transactionItemsSchema, transactionSchema } from './schemas/transactions.ts'
+import { activityLogsSchema } from './schemas/activityLogs.ts'
+
 
 export class SchemaManager {
   private db: Database.Database

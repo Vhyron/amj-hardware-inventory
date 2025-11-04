@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import { Transaction, TransactionItem } from '../pages/Transactions/types'
 import { devtools } from 'zustand/middleware'
-import * as stockStore from './stockStore'
+import { useStockStore } from './stockStore'
 import { StockStatus } from '../pages/Stocks/types'
 import { useLogStore } from './activityLogStore'
 import { useAuthStore } from './authStore'
@@ -31,6 +31,13 @@ interface TransactionStore {
   updateTransactionItem: (id: string, item: Partial<TransactionItem>) => Promise<boolean>
   deleteTransaction: (id: string) => Promise<boolean>
   deleteTransactionItem: (id: string) => Promise<boolean>
+
+  // New method for updating stock quantities
+  updateStockQuantities: (
+    transactionId: string,
+    oldStatus?: string,
+    newStatus?: string
+  ) => Promise<boolean>
 }
 
 export const useTransactionStore = create<TransactionStore>()(
@@ -118,7 +125,7 @@ export const useTransactionStore = create<TransactionStore>()(
           set((state) => ({
             transactions: [newTransaction, ...state.transactions]
           }))
-          
+
           // Create activity log after successful transaction creation
           const currentUser = useAuthStore.getState().user
           if (currentUser) {
@@ -155,9 +162,11 @@ export const useTransactionStore = create<TransactionStore>()(
         const response = await window.context.transactions.addItem(item)
         if (response.success && response.itemId) {
           // Find the stock to get the name
-          const stockStore = window.context.stocks ? await window.context.stocks.getById(item.stockId) : null
-          const stockName = stockStore?.stock?.name || 'Unknown Item'
-          
+          const stockResponse = window.context.stocks
+            ? await window.context.stocks.getById(item.stockId)
+            : null
+          const stockName = stockResponse?.stock?.name || 'Unknown Item'
+
           // Add the new item to the items list with timestamps and stock name
           const newItem = {
             ...item,
@@ -175,9 +184,36 @@ export const useTransactionStore = create<TransactionStore>()(
           if (get().currentTransaction && item.transactionId === get().currentTransaction!.id) {
             const currentTotal = get().currentTransaction?.totalAmount || 0
             const itemTotal = item.quantity * item.unitPrice
-            get().updateTransaction(item.transactionId, {
+            await get().updateTransaction(item.transactionId, {
               totalAmount: currentTotal + itemTotal
             })
+          }
+
+          // ALWAYS deduct stock immediately when adding item (regardless of status)
+          const currentTransaction = get().currentTransaction
+          if (currentTransaction?.status !== 'cancelled') {
+            const { stocks, updateStock, fetchStocks } = useStockStore.getState()
+            const stockToUpdate = stocks.find((s) => s.id === item.stockId)
+
+            if (stockToUpdate) {
+              const newQuantity = Math.max(0, stockToUpdate.quantity - item.quantity)
+              let newStatus: StockStatus = 'In Stock'
+
+              if (newQuantity <= 0) {
+                newStatus = 'Out of Stock'
+              } else if (newQuantity <= (stockToUpdate.reorderPoint || 0)) {
+                newStatus = 'Critical Low'
+              }
+
+              await updateStock({
+                ...stockToUpdate,
+                quantity: newQuantity,
+                status: newStatus
+              })
+
+              // Refresh stocks to get updated data
+              await fetchStocks()
+            }
           }
 
           return response.itemId
@@ -194,58 +230,103 @@ export const useTransactionStore = create<TransactionStore>()(
       }
     },
 
-    updateTransaction: async (id: string, transaction: Partial<Transaction>) => {
-      set({ loading: true, error: null })
+    updateStockQuantities: async (
+      transactionId: string,
+      oldStatus?: string,
+      newStatus?: string
+    ) => {
       try {
-        const response = await window.context.transactions.update(id, transaction)
-        if (response.success) {
-          // Check if status is being changed to 'completed'
-          const isChangingToCompleted = 
-            get().currentTransaction?.status !== 'completed' && 
-            transaction.status === 'completed';
-          
-          // Update stock quantities if status is changing to 'completed'
-          if (isChangingToCompleted) {
-            // Get current items to update stock quantities
-            const items = get().currentItems;
-            
-            // Only proceed if there are items to process
-            if (items.length > 0) {
-              // Get stockStore to update quantities
-              const { stocks, updateStock } = stockStore.useStockStore.getState();
-              
-              // Process each transaction item
-              for (const item of items) {
-                // Find the corresponding stock
-                const stockToUpdate = stocks.find(s => s.id === item.stockId);
-                
-                if (stockToUpdate) {
-                  // Calculate new quantity (subtract the sold quantity)
-                  const newQuantity = Math.max(0, stockToUpdate.quantity - item.quantity);
-                  
-                  // Calculate new status based on quantity and reorder point
-                  let newStatus = 'In Stock';
-                  if (newQuantity <= 0) {
-                    newStatus = 'Out of Stock';
-                  } else if (newQuantity <= (stockToUpdate.reorderPoint || 0)) {
-                    newStatus = 'Critical Low';
-                  }
-                  
-                  // Update the stock in the database
-                  await updateStock({
-                    ...stockToUpdate,
-                    quantity: newQuantity,
-                    status: newStatus as StockStatus
-                  });
-                }
+        // Fetch transaction items
+        const items = get().currentItems
+        if (items.length === 0) {
+          return true // No items to process
+        }
+
+        // Stock update logic based on status transitions:
+        // - Pending/Completed → Cancelled: Restore stock (+)
+        // - Cancelled → Pending/Completed: Deduct stock (-)
+        // - Completed cannot be changed to anything else (locked state)
+
+        let multiplier = 0
+
+        // From pending to cancelled: restore stock
+        if (oldStatus === 'pending' && newStatus === 'cancelled') {
+          multiplier = 1
+        }
+        // From cancelled to pending: deduct stock
+        else if (oldStatus === 'cancelled' && newStatus === 'pending') {
+          multiplier = -1
+        }
+        // From pending to completed: no change (already deducted)
+        else if (oldStatus === 'pending' && newStatus === 'completed') {
+          multiplier = 0
+        }
+        // From cancelled to completed: deduct stock
+        else if (oldStatus === 'cancelled' && newStatus === 'completed') {
+          multiplier = -1
+        }
+
+        // Update stock quantities if there's a change
+        if (multiplier !== 0) {
+          const { stocks, updateStock, fetchStocks } = useStockStore.getState()
+
+          for (const item of items) {
+            const stockToUpdate = stocks.find((s) => s.id === item.stockId)
+
+            if (stockToUpdate) {
+              const newQuantity = Math.max(0, stockToUpdate.quantity + item.quantity * multiplier)
+              let newStatus: StockStatus = 'In Stock'
+
+              if (newQuantity <= 0) {
+                newStatus = 'Out of Stock'
+              } else if (newQuantity <= (stockToUpdate.reorderPoint || 0)) {
+                newStatus = 'Critical Low'
               }
+
+              await updateStock({
+                ...stockToUpdate,
+                quantity: newQuantity,
+                status: newStatus
+              })
             }
           }
 
+          // Refresh stocks to get updated data
+          await fetchStocks()
+        }
+
+        return true
+      } catch (error) {
+        console.error('Error updating stock quantities:', error)
+        return false
+      }
+    },
+
+    updateTransaction: async (id: string, transaction: Partial<Transaction>) => {
+      set({ loading: true, error: null })
+      try {
+        const currentTx = get().currentTransaction
+        const oldStatus = currentTx?.status
+        const newStatus = transaction.status
+
+        // Prevent changes if current status is 'completed'
+        if (oldStatus === 'completed' && newStatus && newStatus !== 'completed') {
+          set({ error: 'Cannot modify a completed transaction. Completed transactions are final.' })
+          return false
+        }
+
+        const response = await window.context.transactions.update(id, transaction)
+        if (response.success) {
+          // Handle stock quantity updates based on status change
+          if (oldStatus !== newStatus && newStatus) {
+            await get().updateStockQuantities(id, oldStatus, newStatus)
+          }
+
           // Get transaction details for logging
-          const existingTransaction = get().transactions.find(t => t.id === id) || get().currentTransaction;
-          const updatedTransaction = { ...existingTransaction, ...transaction };
-          
+          const existingTransaction =
+            get().transactions.find((t) => t.id === id) || get().currentTransaction
+          const updatedTransaction = { ...existingTransaction, ...transaction }
+
           // Update the transaction in the list and current transaction
           set((state) => ({
             transactions: state.transactions.map((t) =>
@@ -260,23 +341,23 @@ export const useTransactionStore = create<TransactionStore>()(
                   }
                 : state.currentTransaction
           }))
-          
+
           // Create activity log after successful transaction update
-          const currentUser = useAuthStore.getState().user;
+          const currentUser = useAuthStore.getState().user
           if (currentUser && updatedTransaction) {
             // Generate appropriate log message based on what was updated
-            let details = `Updated transaction: ${id}`;
-            
+            let details = `Updated transaction: ${id}`
+
             // Add status change to details if status was updated
             if (transaction.status) {
-              details += ` - Status changed to: ${transaction.status}`;
+              details += ` - Status changed to: ${transaction.status}`
             }
-            
+
             // Add amount change to details if amount was updated
             if (transaction.totalAmount !== undefined) {
-              details += ` - Amount: ${transaction.totalAmount}`;
+              details += ` - Amount: ${transaction.totalAmount}`
             }
-            
+
             const logEntry = {
               id: generatePrefixedUUID('log'),
               userId: currentUser.id,
@@ -289,7 +370,7 @@ export const useTransactionStore = create<TransactionStore>()(
             }
             useLogStore.getState().createLog(logEntry)
           }
-          
+
           return true
         } else {
           set({ error: response.message || 'Failed to update transaction' })
@@ -307,6 +388,17 @@ export const useTransactionStore = create<TransactionStore>()(
     updateTransactionItem: async (id: string, item: Partial<TransactionItem>) => {
       set({ loading: true, error: null })
       try {
+        const currentTransaction = get().currentTransaction
+
+        // Prevent item updates if transaction is completed
+        if (currentTransaction?.status === 'completed') {
+          set({ error: 'Cannot modify items in a completed transaction.' })
+          return false
+        }
+
+        // Get the old item to calculate quantity difference
+        const oldItem = get().currentItems.find((i) => i.id === id)
+
         const response = await window.context.transactions.updateItem(id, item)
         if (response.success) {
           // Update the item in the items list
@@ -327,7 +419,41 @@ export const useTransactionStore = create<TransactionStore>()(
 
             // Only trigger update if there's a current transaction
             if (get().currentTransaction) {
-              get().updateTransaction(get().currentTransaction!.id, { totalAmount })
+              await get().updateTransaction(get().currentTransaction!.id, { totalAmount })
+            }
+          }
+
+          // If transaction is not cancelled and quantity changed, adjust stock
+          if (
+            currentTransaction?.status !== 'cancelled' &&
+            oldItem &&
+            item.quantity !== undefined
+          ) {
+            const quantityDiff = item.quantity - oldItem.quantity
+
+            if (quantityDiff !== 0) {
+              const { stocks, updateStock, fetchStocks } = useStockStore.getState()
+              const stockToUpdate = stocks.find((s) => s.id === oldItem.stockId)
+
+              if (stockToUpdate) {
+                const newQuantity = Math.max(0, stockToUpdate.quantity - quantityDiff)
+                let newStatus: StockStatus = 'In Stock'
+
+                if (newQuantity <= 0) {
+                  newStatus = 'Out of Stock'
+                } else if (newQuantity <= (stockToUpdate.reorderPoint || 0)) {
+                  newStatus = 'Critical Low'
+                }
+
+                await updateStock({
+                  ...stockToUpdate,
+                  quantity: newQuantity,
+                  status: newStatus
+                })
+
+                // Refresh stocks to get updated data
+                await fetchStocks()
+              }
             }
           }
 
@@ -349,8 +475,20 @@ export const useTransactionStore = create<TransactionStore>()(
       set({ loading: true, error: null })
       try {
         // Find transaction before deletion to include details in log
-        const transactionToDelete = get().transactions.find(t => t.id === id) || get().currentTransaction;
-        
+        const transactionToDelete =
+          get().transactions.find((t) => t.id === id) || get().currentTransaction
+
+        // Prevent deletion of completed transactions
+        if (transactionToDelete?.status === 'completed') {
+          set({ error: 'Cannot delete a completed transaction. Completed transactions are final.' })
+          return false
+        }
+
+        // If transaction is pending, restore stock before deletion
+        if (transactionToDelete?.status === 'pending') {
+          await get().updateStockQuantities(id, 'pending', 'cancelled')
+        }
+
         const response = await window.context.transactions.delete(id)
         if (response.success) {
           // Remove the transaction from the list
@@ -362,7 +500,7 @@ export const useTransactionStore = create<TransactionStore>()(
             // Clear items if they belonged to the deleted transaction
             currentItems: state.currentTransaction?.id === id ? [] : state.currentItems
           }))
-          
+
           // Create activity log after successful transaction deletion
           const currentUser = useAuthStore.getState().user
           if (currentUser && transactionToDelete) {
@@ -378,7 +516,7 @@ export const useTransactionStore = create<TransactionStore>()(
             }
             useLogStore.getState().createLog(logEntry)
           }
-          
+
           return true
         } else {
           set({ error: response.message || 'Failed to delete transaction' })
@@ -396,11 +534,19 @@ export const useTransactionStore = create<TransactionStore>()(
     deleteTransactionItem: async (id: string) => {
       set({ loading: true, error: null })
       try {
+        const currentTransaction = get().currentTransaction
+
+        // Prevent item deletion if transaction is completed
+        if (currentTransaction?.status === 'completed') {
+          set({ error: 'Cannot delete items from a completed transaction.' })
+          return false
+        }
+
+        // Find the item to be removed for total calculation
+        const itemToRemove = get().currentItems.find((i) => i.id === id)
+
         const response = await window.context.transactions.deleteItem(id)
         if (response.success) {
-          // Find the item to be removed for total calculation
-          const itemToRemove = get().currentItems.find((i) => i.id === id)
-
           // Remove the item from the list
           set((state) => ({
             currentItems: state.currentItems.filter((i) => i.id !== id)
@@ -413,9 +559,35 @@ export const useTransactionStore = create<TransactionStore>()(
 
             // Only proceed if we have a valid transaction ID
             if (get().currentTransaction?.id) {
-              get().updateTransaction(get().currentTransaction!.id, {
+              await get().updateTransaction(get().currentTransaction!.id, {
                 totalAmount: Math.max(0, updatedTotal)
               })
+            }
+          }
+
+          // If transaction is not cancelled, restore stock
+          if (currentTransaction?.status !== 'cancelled' && itemToRemove) {
+            const { stocks, updateStock, fetchStocks } = useStockStore.getState()
+            const stockToUpdate = stocks.find((s) => s.id === itemToRemove.stockId)
+
+            if (stockToUpdate) {
+              const newQuantity = stockToUpdate.quantity + itemToRemove.quantity
+              let newStatus: StockStatus = 'In Stock'
+
+              if (newQuantity <= 0) {
+                newStatus = 'Out of Stock'
+              } else if (newQuantity <= (stockToUpdate.reorderPoint || 0)) {
+                newStatus = 'Critical Low'
+              }
+
+              await updateStock({
+                ...stockToUpdate,
+                quantity: newQuantity,
+                status: newStatus
+              })
+
+              // Refresh stocks to get updated data
+              await fetchStocks()
             }
           }
 

@@ -1,4 +1,4 @@
-import { generatePrefixedUUID } from '../utils/uuid'
+import { generatePrefixedUUID } from '../utils/uuid.ts'
 
 export const usersSchema = `
   CREATE TABLE IF NOT EXISTS users (

@@ -12,7 +12,8 @@ import {
   InputNumber,
   Divider,
   notification,
-  Tag
+  Tag,
+  Alert
 } from 'antd'
 import { useState, useEffect } from 'react'
 import { FormMode } from '@/renderer/src/lib/types'
@@ -25,7 +26,13 @@ import {
   TransactionFormData,
   TransactionItemFormData
 } from '../types'
-import { EditOutlined, DeleteOutlined, PlusOutlined } from '@ant-design/icons'
+import {
+  EditOutlined,
+  DeleteOutlined,
+  PlusOutlined,
+  WarningOutlined,
+  LockOutlined
+} from '@ant-design/icons'
 import { formatCurrency } from '@/renderer/src/lib/utils'
 import { units } from '@/renderer/src/pages/Stocks/types'
 
@@ -47,6 +54,7 @@ export default function TransactionForm({ open, onClose, mode, selected }: Trans
   const [addingItem, setAddingItem] = useState(false)
   const [selectedStock, setSelectedStock] = useState<any>(null)
   const [editingItem, setEditingItem] = useState<string | null>(null)
+  const [statusChanged, setStatusChanged] = useState(false)
 
   const { user } = useAuthStore()
   const { stocks, fetchStocks } = useStockStore()
@@ -60,13 +68,15 @@ export default function TransactionForm({ open, onClose, mode, selected }: Trans
     addTransactionItem,
     updateTransactionItem,
     deleteTransactionItem,
-    fetchTransactionById
+    fetchTransactionById,
+    error
   } = useTransactionStore()
 
   const isViewMode = mode === 'view'
   const isEditMode = mode === 'edit'
   const isDeleteMode = mode === 'delete'
   const isAddMode = mode === 'add'
+  const isCompleted = currentTransaction?.status === 'completed'
 
   // Fetch stocks for dropdown
   useEffect(() => {
@@ -76,7 +86,6 @@ export default function TransactionForm({ open, onClose, mode, selected }: Trans
   // Fetch transaction details when selected transaction changes
   useEffect(() => {
     if (open && selected) {
-      // Fetch transaction details if in edit, view, or delete mode
       if (isEditMode || isViewMode || isDeleteMode) {
         fetchTransactionById(selected.id)
         fetchTransactionItems(selected.id)
@@ -94,9 +103,9 @@ export default function TransactionForm({ open, onClose, mode, selected }: Trans
 
   // Reset forms when modal opens/closes or selected item changes
   useEffect(() => {
+    setStatusChanged(false)
     if (open) {
       if (currentTransaction && (isEditMode || isViewMode || isDeleteMode)) {
-        // Populate form with selected transaction data
         transactionForm.setFieldsValue({
           customerName: currentTransaction.customerName,
           referenceNo: currentTransaction.referenceNo,
@@ -104,7 +113,6 @@ export default function TransactionForm({ open, onClose, mode, selected }: Trans
           notes: currentTransaction.notes
         })
       } else if (isAddMode) {
-        // Reset form for add mode with default values
         transactionForm.resetFields()
         transactionForm.setFieldsValue({
           status: 'pending'
@@ -113,8 +121,58 @@ export default function TransactionForm({ open, onClose, mode, selected }: Trans
     }
   }, [open, currentTransaction, isEditMode, isViewMode, isDeleteMode, isAddMode, transactionForm])
 
+  // Show error notifications
+  useEffect(() => {
+    if (error) {
+      notification.error({
+        message: 'Error',
+        description: error
+      })
+    }
+  }, [error])
+
   const calculateTotalAmount = () => {
     return currentItems.reduce((total, item) => total + item.quantity * item.unitPrice, 0)
+  }
+
+  const handleStatusChange = (newStatus: string) => {
+    const oldStatus = currentTransaction?.status
+    if (oldStatus && oldStatus !== newStatus) {
+      setStatusChanged(true)
+    } else {
+      setStatusChanged(false)
+    }
+  }
+
+  const getStatusChangeMessage = () => {
+    const oldStatus = currentTransaction?.status
+    const newStatus = transactionForm.getFieldValue('status')
+
+    if (oldStatus === 'pending' && newStatus === 'cancelled') {
+      return {
+        type: 'info' as const,
+        message: 'Stock quantities will be restored when this transaction is cancelled.'
+      }
+    } else if (oldStatus === 'cancelled' && newStatus === 'pending') {
+      return {
+        type: 'warning' as const,
+        message: 'Stock quantities will be deducted again when this transaction is set to pending.'
+      }
+    } else if (oldStatus === 'pending' && newStatus === 'completed') {
+      return {
+        type: 'warning' as const,
+        message:
+          'Marking as completed will finalize this transaction. Once completed, it cannot be modified or cancelled.'
+      }
+    } else if (oldStatus === 'cancelled' && newStatus === 'completed') {
+      return {
+        type: 'warning' as const,
+        message:
+          'Stock will be deducted and the transaction will be finalized. Once completed, it cannot be modified.'
+      }
+    }
+
+    return null
   }
 
   const handleSubmit = async () => {
@@ -125,31 +183,56 @@ export default function TransactionForm({ open, onClose, mode, selected }: Trans
       let success = false
 
       if (isDeleteMode && selected) {
-        // Handle delete transaction
         success = await deleteTransaction(selected.id)
         if (success) {
-          notification.success({ message: 'Transaction deleted successfully' })
+          notification.success({
+            message: 'Transaction deleted successfully',
+            description:
+              currentTransaction?.status === 'pending'
+                ? 'Stock quantities have been restored.'
+                : undefined
+          })
           onClose()
         }
       } else if (isEditMode && currentTransaction) {
-        // Handle update transaction
+        const oldStatus = currentTransaction.status
+        const newStatus = values.status
+
         success = await updateTransaction(currentTransaction.id, values)
         if (success) {
-          notification.success({ message: 'Transaction updated successfully' })
+          let description = 'Transaction updated successfully'
+
+          if (oldStatus !== newStatus) {
+            if (newStatus === 'completed') {
+              description =
+                'Transaction completed and finalized. This transaction can no longer be modified.'
+            } else if (newStatus === 'cancelled') {
+              description = 'Transaction cancelled. Stock quantities have been restored.'
+            } else if (oldStatus === 'cancelled' && newStatus === 'pending') {
+              description = 'Transaction restored to pending. Stock quantities have been deducted.'
+            }
+          }
+
+          notification.success({
+            message: 'Success',
+            description
+          })
           onClose()
         }
       } else if (isAddMode) {
-        // Handle create transaction
-        // Initialize with submitted values plus calculated total
         const newTransaction: TransactionFormData = {
           ...values,
-          status: values.status || 'pending', // Ensure status is never undefined
-          totalAmount: 0 // Initial amount is 0, will be updated as items are added
+          status: values.status || 'pending',
+          totalAmount: 0
         }
 
         const transactionId = await createTransaction(newTransaction as Transaction)
         if (transactionId) {
-          notification.success({ message: 'Transaction created successfully' })
+          notification.success({
+            message: 'Transaction created successfully',
+            description:
+              'You can now add items to this transaction. Stock will be deducted as items are added.'
+          })
           onClose()
         } else {
           notification.error({ message: 'Failed to create transaction' })
@@ -166,7 +249,6 @@ export default function TransactionForm({ open, onClose, mode, selected }: Trans
     try {
       const values = await itemForm.validateFields()
 
-      // Make sure we have the necessary data
       if (!currentTransaction && !values.transactionId) {
         notification.error({ message: 'Cannot add item: No transaction ID specified' })
         return
@@ -183,21 +265,33 @@ export default function TransactionForm({ open, onClose, mode, selected }: Trans
 
       let success = false
       if (editingItem) {
-        // Update existing item
         success = await updateTransactionItem(editingItem, newItem)
         if (success) {
-          notification.success({ message: 'Item updated successfully' })
+          notification.success({
+            message: 'Item updated successfully',
+            description:
+              currentTransaction?.status !== 'cancelled'
+                ? 'Stock quantities have been adjusted.'
+                : undefined
+          })
           setAddingItem(false)
           setEditingItem(null)
           itemForm.resetFields()
+          fetchStocks()
         }
       } else {
-        // Add new item
         const itemId = await addTransactionItem(newItem)
         if (itemId) {
-          notification.success({ message: 'Item added successfully' })
+          notification.success({
+            message: 'Item added successfully',
+            description:
+              currentTransaction?.status !== 'cancelled'
+                ? 'Stock quantity has been deducted.'
+                : undefined
+          })
           setAddingItem(false)
           itemForm.resetFields()
+          fetchStocks()
         }
       }
     } catch (error) {
@@ -219,18 +313,24 @@ export default function TransactionForm({ open, onClose, mode, selected }: Trans
   const handleDeleteItem = async (itemId: string) => {
     const success = await deleteTransactionItem(itemId)
     if (success) {
-      notification.success({ message: 'Item removed successfully' })
+      notification.success({
+        message: 'Item removed successfully',
+        description:
+          currentTransaction?.status !== 'cancelled'
+            ? 'Stock quantity has been restored.'
+            : undefined
+      })
+      fetchStocks()
     }
   }
 
-  // Handle stock selection
   const handleStockChange = (value: string) => {
     const selected = stocks.find((s) => s.id === value)
     if (selected) {
       setSelectedStock(selected)
       itemForm.setFieldsValue({
         unit: selected.unit,
-        unitPrice: selected.unitPrice // Use unit price for sales
+        unitPrice: selected.unitPrice
       })
     }
   }
@@ -267,7 +367,7 @@ export default function TransactionForm({ open, onClose, mode, selected }: Trans
       title: 'Actions',
       key: 'actions',
       render: (_: any, record: TransactionItem) =>
-        !isViewMode && !isDeleteMode ? (
+        !isViewMode && !isDeleteMode && !isCompleted ? (
           <Space>
             <Button icon={<EditOutlined />} type="text" onClick={() => handleEditItem(record)} />
             <Button
@@ -281,19 +381,6 @@ export default function TransactionForm({ open, onClose, mode, selected }: Trans
     }
   ]
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'pending':
-        return 'processing'
-      case 'completed':
-        return 'success'
-      case 'cancelled':
-        return 'error'
-      default:
-        return 'default'
-    }
-  }
-
   const modalTitle = () => {
     if (isViewMode) return `View Transaction - ${currentTransaction?.id || ''}`
     if (isEditMode) return `Edit Transaction - ${currentTransaction?.id || ''}`
@@ -301,8 +388,7 @@ export default function TransactionForm({ open, onClose, mode, selected }: Trans
     return 'Create New Transaction'
   }
 
-  // Determine if any items exist for the current transaction
-  const hasItems = currentItems.length > 0
+  const statusChangeInfo = getStatusChangeMessage()
 
   return (
     <Modal
@@ -314,7 +400,7 @@ export default function TransactionForm({ open, onClose, mode, selected }: Trans
         <Button key="cancel" onClick={onClose}>
           Cancel
         </Button>,
-        !isViewMode && (
+        !isViewMode && !isCompleted && (
           <Button
             key="submit"
             type={isDeleteMode ? 'primary' : 'primary'}
@@ -327,8 +413,24 @@ export default function TransactionForm({ open, onClose, mode, selected }: Trans
         )
       ]}
     >
+      {/* Completed Transaction Lock Notice */}
+      {isCompleted && (isEditMode || isDeleteMode) && (
+        <Alert
+          message="Transaction Completed"
+          description="This transaction is completed and cannot be modified or deleted. Completed transactions are final."
+          type="info"
+          showIcon
+          icon={<LockOutlined />}
+          style={{ marginBottom: 16 }}
+        />
+      )}
+
       {/* Transaction Form */}
-      <Form form={transactionForm} layout="vertical" disabled={isViewMode || isDeleteMode}>
+      <Form
+        form={transactionForm}
+        layout="vertical"
+        disabled={isViewMode || isDeleteMode || isCompleted}
+      >
         <Row gutter={16}>
           <Col span={12}>
             <Form.Item name="customerName" label="Customer Name">
@@ -348,7 +450,7 @@ export default function TransactionForm({ open, onClose, mode, selected }: Trans
               label="Status"
               rules={[{ required: true, message: 'Please select status' }]}
             >
-              <Select disabled={isAddMode}>
+              <Select disabled={isAddMode || isCompleted} onChange={handleStatusChange}>
                 <Option value="pending">Pending</Option>
                 <Option value="completed">Completed</Option>
                 <Option value="cancelled">Cancelled</Option>
@@ -356,6 +458,19 @@ export default function TransactionForm({ open, onClose, mode, selected }: Trans
             </Form.Item>
           </Col>
         </Row>
+
+        {/* Status Change Alert */}
+        {statusChanged && statusChangeInfo && !isCompleted && (
+          <Alert
+            message="Stock Update Notice"
+            description={statusChangeInfo.message}
+            type={statusChangeInfo.type}
+            showIcon
+            icon={<WarningOutlined />}
+            style={{ marginBottom: 16 }}
+          />
+        )}
+
         <Form.Item name="notes" label="Notes">
           <TextArea rows={2} />
         </Form.Item>
@@ -365,6 +480,27 @@ export default function TransactionForm({ open, onClose, mode, selected }: Trans
       {(isViewMode || isEditMode || isDeleteMode) && (
         <div style={{ marginTop: 24 }}>
           <Divider orientation="left">Transaction Items</Divider>
+
+          {currentTransaction?.status === 'pending' && isEditMode && (
+            <Alert
+              message="Stock Management Active"
+              description="Stock is deducted immediately when items are added. Items can be modified until the transaction is completed or cancelled."
+              type="info"
+              showIcon
+              style={{ marginBottom: 16 }}
+            />
+          )}
+
+          {currentTransaction?.status === 'cancelled' && (
+            <Alert
+              message="Transaction Cancelled"
+              description="Stock quantities have been restored. You can restore this transaction to pending status to reactivate it."
+              type="warning"
+              showIcon
+              style={{ marginBottom: 16 }}
+            />
+          )}
+
           <div
             style={{
               display: 'flex',
@@ -374,7 +510,7 @@ export default function TransactionForm({ open, onClose, mode, selected }: Trans
             }}
           >
             <Title level={5}>Items</Title>
-            {!isViewMode && !isDeleteMode && (
+            {!isViewMode && !isDeleteMode && !isCompleted && (
               <Button
                 type="primary"
                 icon={<PlusOutlined />}
@@ -411,7 +547,7 @@ export default function TransactionForm({ open, onClose, mode, selected }: Trans
       )}
 
       {/* Item Form (Add/Edit items) */}
-      {addingItem && (isEditMode || isAddMode) && (
+      {addingItem && isEditMode && !isCompleted && (
         <Modal
           title={editingItem ? 'Edit Item' : 'Add Item'}
           open={addingItem}
@@ -436,6 +572,20 @@ export default function TransactionForm({ open, onClose, mode, selected }: Trans
             </Button>
           ]}
         >
+          {currentTransaction?.status !== 'cancelled' && (
+            <Alert
+              message="Stock will be updated"
+              description={
+                editingItem
+                  ? 'Modifying this item will adjust stock quantities based on the quantity change.'
+                  : 'Adding this item will immediately deduct the quantity from stock.'
+              }
+              type="warning"
+              showIcon
+              style={{ marginBottom: 16 }}
+            />
+          )}
+
           <Form form={itemForm} layout="vertical">
             <Form.Item
               name="stockId"
@@ -449,12 +599,12 @@ export default function TransactionForm({ open, onClose, mode, selected }: Trans
                 optionFilterProp="children"
                 filterOption={(input, option) =>
                   (option?.children as unknown as string)
-                  ?.toLowerCase()
-                  .includes(input.toLowerCase())
+                    ?.toLowerCase()
+                    .includes(input.toLowerCase())
                 }
               >
                 {stocks
-                  .filter(stock => stock.quantity > 0) // Filter out stocks with zero quantity
+                  .filter((stock) => stock.quantity > 0)
                   .map((stock) => (
                     <Option key={stock.id} value={stock.id}>
                       {stock.name} - {stock.sku} ({stock.quantity} {stock.unit} available)
@@ -511,19 +661,23 @@ export default function TransactionForm({ open, onClose, mode, selected }: Trans
         </Modal>
       )}
 
-      {/* Create Item UI for adding mode when no items exist yet */}
-      {isAddMode &&  (
+      {/* Create Item UI for adding mode */}
+      {isAddMode && (
         <div style={{ marginTop: 24, textAlign: 'center' }}>
           <Title level={5}>Please save the transaction first to add items</Title>
-          <p>After creating the transaction, you can add items to it.</p>
+          <p>
+            After creating the transaction, you can add items. Stock will be deducted as you add
+            each item.
+          </p>
         </div>
       )}
 
       {/* Warning for delete mode */}
-      {isDeleteMode && (
+      {isDeleteMode && !isCompleted && (
         <div style={{ marginTop: 16 }}>
           <Typography.Text type="danger" strong>
-            Warning: This will permanently delete the transaction and all its associated items. This
+            Warning: This will permanently delete the transaction and all its associated items.
+            {currentTransaction?.status === 'pending' && ' Stock quantities will be restored.'} This
             action cannot be undone.
           </Typography.Text>
         </div>

@@ -12,9 +12,7 @@ import {
   InputNumber,
   Divider,
   notification,
-  Tag,
-  Alert,
-  App
+  Alert
 } from 'antd'
 import { useState, useEffect } from 'react'
 import { FormMode } from '@/renderer/src/lib/types'
@@ -23,7 +21,7 @@ import { useSupplierStore } from '@/renderer/src/store/supplierStore'
 import { useAuthStore } from '@/renderer/src/store/authStore'
 import { useStockStore } from '@/renderer/src/store/stockStore'
 import { useCategoryStore } from '@/renderer/src/store/categoryStore'
-import { SupplyOrder, OrderItem, SupplyOrderFormData, OrderItemFormData } from '../types'
+import { SupplyOrder, OrderItem, OrderItemFormData } from '../types'
 import { EditOutlined, DeleteOutlined, PlusOutlined } from '@ant-design/icons'
 import { formatCurrency } from '@/renderer/src/lib/utils'
 import { units } from '@/renderer/src/pages/Stocks/types'
@@ -47,7 +45,7 @@ export default function SupplyOrderForm({ open, onClose, mode, selected }: Suppl
   const [selectedStock, setSelectedStock] = useState<any>(null)
   const [editingItem, setEditingItem] = useState<string | null>(null)
   const [currentSupplierId, setCurrentSupplierId] = useState<string>('')
-  
+
   // New state variables for custom confirmation dialog
   const [confirmModalVisible, setConfirmModalVisible] = useState(false)
   const [newSupplierId, setNewSupplierId] = useState<string | null>(null)
@@ -79,7 +77,9 @@ export default function SupplyOrderForm({ open, onClose, mode, selected }: Suppl
   const isAddMode = mode === 'add'
 
   // Filter stocks based on the selected supplier
-  const supplierStocks = stocks.filter(stock => currentSupplierId && stock.supplierId === currentSupplierId)
+  const supplierStocks = stocks.filter(
+    (stock) => currentSupplierId && stock.supplierId === currentSupplierId
+  )
   const hasStocksFromSupplier = supplierStocks.length > 0
 
   // Fetch suppliers, stocks, and categories for dropdowns
@@ -124,59 +124,59 @@ export default function SupplyOrderForm({ open, onClose, mode, selected }: Suppl
 
   // Watch supplierId changes
   const handleSupplierChange = (value: string) => {
-    const previousSupplierId = currentSupplierId;
-    
+    const previousSupplierId = currentSupplierId
+
     // Clear stock selection when supplier changes
     if (addingItem) {
       itemForm.setFieldValue('stockId', undefined)
       setSelectedStock(null)
     }
-    
+
     // If in edit mode and supplier has changed, check if there are items before showing confirmation
     if (isEditMode && previousSupplierId && value !== previousSupplierId) {
       // Only show confirmation if there are items to delete
       if (orderItems.length > 0) {
-        setConfirmModalVisible(true);
-        setNewSupplierId(value);
-        setPreviousSupplierId(previousSupplierId);
+        setConfirmModalVisible(true)
+        setNewSupplierId(value)
+        setPreviousSupplierId(previousSupplierId)
         // Don't update currentSupplierId yet - wait for confirmation
       } else {
         // No items to delete, directly update the supplier
-        setCurrentSupplierId(value);
-        
+        setCurrentSupplierId(value)
+
         // First update the local state to show immediate UI changes
         if (currentOrder) {
-          const supplierName = suppliers.find(s => s.id === value)?.name || "Unknown Supplier";
-          
+          const supplierName = suppliers.find((s) => s.id === value)?.name || 'Unknown Supplier'
+
           // Update both the orders list and current order directly in the store
           const updatedOrder = {
             ...currentOrder,
             supplierId: value,
             supplierName: supplierName,
             updatedAt: new Date().toISOString()
-          };
-          
+          }
+
           // Update the store directly - this ensures immediate UI update
-          const store = useSupplyOrderStore.getState();
-          store.setCurrentOrder(updatedOrder);
-          
+          const store = useSupplyOrderStore.getState()
+          store.setCurrentOrder(updatedOrder)
+
           // Also update the orders list in the store to maintain consistency
-          store.setOrders(store.orders.map(order => 
-            order.id === currentOrder.id ? updatedOrder : order
-          ));
-          
+          store.setOrders(
+            store.orders.map((order) => (order.id === currentOrder.id ? updatedOrder : order))
+          )
+
           // Then update the database (async operation)
-          updateOrder(currentOrder.id, { 
-            supplierId: value,
+          updateOrder(currentOrder.id, {
+            supplierId: value
           }).then(() => {
             // Re-fetch the data to ensure everything is in sync
-            fetchOrderById(currentOrder.id);
-          });
+            fetchOrderById(currentOrder.id)
+          })
         }
       }
     } else {
       // Not in edit mode or no change, just update the supplier ID directly
-      setCurrentSupplierId(value);
+      setCurrentSupplierId(value)
     }
   }
 
@@ -243,6 +243,7 @@ export default function SupplyOrderForm({ open, onClose, mode, selected }: Suppl
         // Initialize with submitted values plus calculated total and user info
         const newOrder = {
           ...values,
+          status: 'Pending',
           orderedBy: user?.username || 'unknown',
           totalCost: 0 // Initial cost is 0, will be updated as items are added
         }
@@ -465,10 +466,10 @@ export default function SupplyOrderForm({ open, onClose, mode, selected }: Suppl
           </Col>
           <Col span={12}>
             <Form.Item name="status" label="Status">
-              <Select>
+              <Select disabled={isAddMode}>
                 <Option value="Pending">Pending</Option>
                 <Option value="Approved">Approved</Option>
-                {!isAddMode && <Option value="Delivered">Delivered</Option>}
+                <Option value="Delivered">Delivered</Option>
                 <Option value="Cancelled">Cancelled</Option>
               </Select>
             </Form.Item>
@@ -560,7 +561,11 @@ export default function SupplyOrderForm({ open, onClose, mode, selected }: Suppl
               {!currentSupplierId ? (
                 <Alert message="Please select a supplier first" type="info" showIcon />
               ) : !hasStocksFromSupplier ? (
-                <Alert message={`No existing products from this supplier in your inventory yet`} type="warning" showIcon />
+                <Alert
+                  message={`No existing products from this supplier in your inventory yet`}
+                  type="warning"
+                  showIcon
+                />
               ) : (
                 <Select
                   allowClear
@@ -676,7 +681,7 @@ export default function SupplyOrderForm({ open, onClose, mode, selected }: Suppl
       )}
 
       {/* Create Item UI for adding mode when no items exist yet */}
-      {isAddMode &&  (
+      {isAddMode && (
         <div style={{ marginTop: 24, textAlign: 'center' }}>
           <Title level={5}>Please save the order first to add items</Title>
           <p>After creating the order, you can add items to it.</p>
@@ -700,58 +705,59 @@ export default function SupplyOrderForm({ open, onClose, mode, selected }: Suppl
         onOk={async () => {
           // Delete all current order items if confirmed
           for (const item of orderItems) {
-            await deleteOrderItem(item.id);
+            await deleteOrderItem(item.id)
           }
-          
+
           // Update the order with the new supplier
           if (newSupplierId && currentOrder) {
             // Get the supplier name for UI update
-            const supplierName = suppliers.find(s => s.id === newSupplierId)?.name || "Unknown Supplier";
-            
+            const supplierName =
+              suppliers.find((s) => s.id === newSupplierId)?.name || 'Unknown Supplier'
+
             // First update the store directly to ensure immediate UI update
-            const store = useSupplyOrderStore.getState();
+            const store = useSupplyOrderStore.getState()
             const updatedOrder = {
               ...currentOrder,
               supplierId: newSupplierId,
               supplierName: supplierName,
               updatedAt: new Date().toISOString(),
               totalCost: 0
-            };
-            
+            }
+
             // Update both currentOrder and orders list in the store for immediate UI refresh
-            store.setCurrentOrder(updatedOrder);
-            store.setOrders(store.orders.map(order => 
-              order.id === currentOrder.id ? updatedOrder : order
-            ));
-            
+            store.setCurrentOrder(updatedOrder)
+            store.setOrders(
+              store.orders.map((order) => (order.id === currentOrder.id ? updatedOrder : order))
+            )
+
             // Update the local state
-            setCurrentSupplierId(newSupplierId);
-            
+            setCurrentSupplierId(newSupplierId)
+
             // Then update the database (async operation)
-            await updateOrder(currentOrder.id, { 
+            await updateOrder(currentOrder.id, {
               supplierId: newSupplierId,
               totalCost: 0 // Reset total cost since all items are removed
-            });
-            
-            // Refresh the data from server to ensure everything is in sync
-            await fetchOrderItems(currentOrder.id); // Clear items list in state
-            await fetchOrderById(currentOrder.id);
-          }
-          
-          notification.info({ 
-            message: 'Order items removed', 
-            description: 'All items have been removed. You can now add items from the new supplier.' 
-          });
+            })
 
-          setConfirmModalVisible(false);
+            // Refresh the data from server to ensure everything is in sync
+            await fetchOrderItems(currentOrder.id) // Clear items list in state
+            await fetchOrderById(currentOrder.id)
+          }
+
+          notification.info({
+            message: 'Order items removed',
+            description: 'All items have been removed. You can now add items from the new supplier.'
+          })
+
+          setConfirmModalVisible(false)
         }}
         onCancel={() => {
           // Revert supplier selection if canceled
           if (previousSupplierId) {
-            setCurrentSupplierId(previousSupplierId);
-            orderForm.setFieldValue('supplierId', previousSupplierId);
+            setCurrentSupplierId(previousSupplierId)
+            orderForm.setFieldValue('supplierId', previousSupplierId)
           }
-          setConfirmModalVisible(false);
+          setConfirmModalVisible(false)
         }}
         okText="Continue"
         okButtonProps={{ danger: true }}

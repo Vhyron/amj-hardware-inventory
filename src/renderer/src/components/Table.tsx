@@ -12,10 +12,10 @@ type TableRowSelection<T extends object> = TableProps<T>['rowSelection']
 
 // Define a type for our custom options
 export interface TableActionOption {
-  label: string;
-  key: string;
-  icon: ReactNode;
-  disabled?: boolean;
+  label: string
+  key: string
+  icon: ReactNode
+  disabled?: boolean
 }
 
 // eslint-disable-next-line react-refresh/only-export-components
@@ -32,7 +32,7 @@ export const generateColumns = <T extends object>(
 
   // If filterKeys is provided, create columns in the specified order
   if (filterKeys && filterKeys.length > 0) {
-    columns = filterKeys.map(key => {
+    columns = filterKeys.map((key) => {
       const column: any = {
         title: String(key)
           .replace(/(^|_)([a-z])/g, (_, _space, letter) => ' ' + letter.toUpperCase())
@@ -156,24 +156,26 @@ export const generateColumns = <T extends object>(
   }
 
   // Add actions column
-  columns.push({
-    dataIndex: 'actions',
-    key: 'actions',
-    render: (_, record) => (
-      <div style={{ display: 'flex', justifyContent: 'center' }}>
-        {options?.map((v: TableActionOption, i: number) => (
-          <Tooltip key={i} title={v.label}>
-            <Button
-              icon={v.icon}
-              onClick={() => onClick(record, v.key)}
-              style={{ marginRight: 10 }}
-              disabled={v.disabled}
-            />
-          </Tooltip>
-        ))}
-      </div>
-    )
-  })
+  if (options !== undefined) {
+    columns.push({
+      dataIndex: 'actions',
+      key: 'actions',
+      render: (_, record) => (
+        <div style={{ display: 'flex', justifyContent: 'center' }}>
+          {options?.map((v: TableActionOption, i: number) => (
+            <Tooltip key={i} title={v.label}>
+              <Button
+                icon={v.icon}
+                onClick={() => onClick(record, v.key)}
+                style={{ marginRight: 10 }}
+                disabled={v.disabled}
+              />
+            </Tooltip>
+          ))}
+        </div>
+      )
+    })
+  }
 
   return columns
 }

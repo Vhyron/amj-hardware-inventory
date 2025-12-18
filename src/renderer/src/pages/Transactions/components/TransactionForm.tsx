@@ -1,5 +1,3 @@
-// UPDATED TransactionForm.tsx - Allow adding items during transaction creation
-
 import {
   Form,
   Modal,
@@ -14,6 +12,7 @@ import {
   InputNumber,
   Divider,
   notification,
+  Tag,
   Alert
 } from 'antd'
 import { useState, useEffect } from 'react'
@@ -53,9 +52,16 @@ export default function TransactionForm({ open, onClose, mode, selected }: Trans
   const [selectedStock, setSelectedStock] = useState<any>(null)
   const [editingItem, setEditingItem] = useState<string | null>(null)
   const [statusChanged, setStatusChanged] = useState(false)
+  const [stockWarnings, setStockWarnings] = useState<
+    Array<{
+      itemId: string
+      productName: string
+      required: number
+      available: number
+    }>
+  >([])
 
   const [localItems, setLocalItems] = useState<LocalItem[]>([])
-
   const { stocks, fetchStocks } = useStockStore()
   const {
     createTransaction,
@@ -99,6 +105,7 @@ export default function TransactionForm({ open, onClose, mode, selected }: Trans
   useEffect(() => {
     setStatusChanged(false)
     setLocalItems([])
+    setStockWarnings([])
 
     if (open) {
       if (currentTransaction && (isEditMode || isViewMode || isDeleteMode)) {
@@ -108,6 +115,10 @@ export default function TransactionForm({ open, onClose, mode, selected }: Trans
           status: currentTransaction.status,
           notes: currentTransaction.notes
         })
+
+        if (currentTransaction.status === 'pending' || currentTransaction.status === 'cancelled') {
+          setTimeout(() => checkStockAvailability(), 100)
+        }
       } else if (isAddMode) {
         transactionForm.resetFields()
         transactionForm.setFieldsValue({
@@ -117,6 +128,12 @@ export default function TransactionForm({ open, onClose, mode, selected }: Trans
     }
   }, [open, currentTransaction, isEditMode, isViewMode, isDeleteMode, isAddMode, transactionForm])
 
+  useEffect(() => {
+    if (open && transactionForm.getFieldValue('status') === 'completed') {
+      checkStockAvailability()
+    }
+  }, [currentItems, localItems, stocks, open])
+
   const calculateTotalAmount = () => {
     if (isAddMode) {
       return localItems.reduce((total, item) => total + item.quantity * item.unitPrice, 0)
@@ -124,16 +141,53 @@ export default function TransactionForm({ open, onClose, mode, selected }: Trans
     return currentItems.reduce((total, item) => total + item.quantity * item.unitPrice, 0)
   }
 
+  const checkStockAvailability = () => {
+    const warnings: Array<{
+      itemId: string
+      productName: string
+      required: number
+      available: number
+    }> = []
+
+    const itemsToCheck = isAddMode ? localItems : currentItems
+
+    itemsToCheck.forEach((item) => {
+      const stock = stocks.find((s) => s.id === item.stockId)
+      if (stock && stock.quantity < item.quantity) {
+        warnings.push({
+          itemId: isAddMode ? item.tempId : item.id,
+          productName: item.stockName,
+          required: item.quantity,
+          available: stock.quantity
+        })
+      }
+    })
+
+    setStockWarnings(warnings)
+    return warnings.length === 0
+  }
+
   const handleStatusChange = (newStatus: string) => {
     if (isAddMode) {
+      if (newStatus === 'completed') {
+        checkStockAvailability()
+      } else {
+        setStockWarnings([])
+      }
       return
     }
 
     const oldStatus = currentTransaction?.status
     if (oldStatus && oldStatus !== newStatus) {
       setStatusChanged(true)
+      if (newStatus === 'completed') {
+        checkStockAvailability()
+      } else {
+        setStockWarnings([])
+      }
     } else {
       setStatusChanged(false)
+      setStockWarnings([])
     }
   }
 
@@ -182,6 +236,14 @@ export default function TransactionForm({ open, onClose, mode, selected }: Trans
                 : undefined
           })
           onClose()
+        } else {
+          const { error } = useTransactionStore.getState()
+          if (error) {
+            notification.error({
+              message: 'Failed to delete transaction',
+              description: error
+            })
+          }
         }
       } else if (isEditMode && currentTransaction) {
         const oldStatus = currentTransaction.status
@@ -207,6 +269,15 @@ export default function TransactionForm({ open, onClose, mode, selected }: Trans
             description
           })
           onClose()
+        } else {
+          const { error } = useTransactionStore.getState()
+          if (error) {
+            notification.error({
+              message: 'Cannot complete transaction',
+              description: error,
+              duration: 8
+            })
+          }
         }
       } else if (isAddMode) {
         const totalAmount = calculateTotalAmount()
@@ -227,7 +298,16 @@ export default function TransactionForm({ open, onClose, mode, selected }: Trans
           })
           onClose()
         } else {
-          notification.error({ message: 'Failed to create transaction' })
+          const { error } = useTransactionStore.getState()
+          if (error) {
+            notification.error({
+              message: 'Cannot create transaction',
+              description: error,
+              duration: 8
+            })
+          } else {
+            notification.error({ message: 'Failed to create transaction' })
+          }
         }
       }
     } catch (error) {
@@ -329,6 +409,15 @@ export default function TransactionForm({ open, onClose, mode, selected }: Trans
           setAddingItem(false)
           setEditingItem(null)
           itemForm.resetFields()
+        } else {
+          const { error } = useTransactionStore.getState()
+          if (error) {
+            notification.error({
+              message: 'Cannot update item',
+              description: error,
+              duration: 6
+            })
+          }
         }
       } else {
         if (!currentTransaction) {
@@ -349,6 +438,15 @@ export default function TransactionForm({ open, onClose, mode, selected }: Trans
           notification.success({ message: 'Item added successfully' })
           setAddingItem(false)
           itemForm.resetFields()
+        } else {
+          const { error } = useTransactionStore.getState()
+          if (error) {
+            notification.error({
+              message: 'Cannot add item',
+              description: error,
+              duration: 6
+            })
+          }
         }
       }
     } catch (error) {
@@ -396,13 +494,48 @@ export default function TransactionForm({ open, onClose, mode, selected }: Trans
     {
       title: 'Product',
       dataIndex: 'stockName',
-      key: 'stockName'
+      key: 'stockName',
+      render: (name: string, record: any) => {
+        const itemId = isAddMode ? record.tempId : record.id
+        const hasWarning = stockWarnings.some((w) => w.itemId === itemId)
+        return (
+          <span
+            style={{
+              color: hasWarning ? '#ff4d4f' : 'inherit',
+              fontWeight: hasWarning ? 'bold' : 'normal'
+            }}
+          >
+            {hasWarning && '⚠️ '}
+            {name}
+          </span>
+        )
+      }
     },
     {
       title: 'Quantity',
       dataIndex: 'quantity',
       key: 'quantity',
-      render: (qty: number, record: any) => `${qty} ${record.unit}`
+      render: (qty: number, record: any) => {
+        const itemId = isAddMode ? record.tempId : record.id
+        const warning = stockWarnings.find((w) => w.itemId === itemId)
+        return (
+          <span>
+            <span
+              style={{
+                color: warning ? '#ff4d4f' : 'inherit',
+                fontWeight: warning ? 'bold' : 'normal'
+              }}
+            >
+              {qty} {record.unit}
+            </span>
+            {warning && (
+              <div style={{ fontSize: '12px', color: '#ff4d4f' }}>
+                Only {warning.available} available
+              </div>
+            )}
+          </span>
+        )
+      }
     },
     {
       title: 'Unit Price',
@@ -484,7 +617,18 @@ export default function TransactionForm({ open, onClose, mode, selected }: Trans
           Cancel
         </Button>,
         !isViewMode && (
-          <Button key="submit" type="primary" onClick={handleSubmit} loading={submitting}>
+          <Button
+            key="submit"
+            type="primary"
+            onClick={handleSubmit}
+            loading={submitting}
+            disabled={
+              stockWarnings.length > 0 && transactionForm.getFieldValue('status') === 'completed'
+            }
+            danger={
+              stockWarnings.length > 0 && transactionForm.getFieldValue('status') === 'completed'
+            }
+          >
             {isDeleteMode ? 'Delete' : isEditMode ? 'Update' : 'Create'}
           </Button>
         )
@@ -539,6 +683,40 @@ export default function TransactionForm({ open, onClose, mode, selected }: Trans
             type={statusChangeInfo.type}
             showIcon
             icon={<WarningOutlined />}
+            style={{ marginBottom: 16 }}
+          />
+        )}
+
+        {stockWarnings.length > 0 && transactionForm.getFieldValue('status') === 'completed' && (
+          <Alert
+            message="⚠️ Insufficient Stock - Cannot Complete Transaction"
+            description={
+              <div>
+                <p style={{ marginBottom: 8, fontWeight: 'bold' }}>
+                  The following items do not have enough stock available:
+                </p>
+                <ul style={{ marginBottom: 0, paddingLeft: 20 }}>
+                  {stockWarnings.map((warning, index) => (
+                    <li key={index}>
+                      <strong>{warning.productName}</strong>: Need {warning.required} units, only{' '}
+                      {warning.available} available
+                      {warning.available > 0 && (
+                        <span style={{ color: '#1890ff' }}>
+                          {' '}
+                          (shortage: {warning.required - warning.available})
+                        </span>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+                <p style={{ marginTop: 8, marginBottom: 0 }}>
+                  <strong>Action required:</strong> Please reduce the quantities or change status to
+                  "Pending" until stock becomes available.
+                </p>
+              </div>
+            }
+            type="error"
+            showIcon
             style={{ marginBottom: 16 }}
           />
         )}
@@ -605,7 +783,6 @@ export default function TransactionForm({ open, onClose, mode, selected }: Trans
         />
       </div>
 
-      {/* Item Form (Add/Edit items) */}
       {addingItem && (
         <Modal
           title={editingItem ? 'Edit Item' : 'Add Item'}

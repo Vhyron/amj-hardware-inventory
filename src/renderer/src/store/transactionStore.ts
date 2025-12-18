@@ -140,6 +140,7 @@ export const useTransactionStore = create<TransactionStore>()(
             useLogStore.getState().createLog(logEntry)
           }
 
+          // Add items and handle stock deduction for completed transactions
           if (items && items.length > 0) {
             const { stocks, fetchStocks } = useStockStore.getState()
 
@@ -170,6 +171,7 @@ export const useTransactionStore = create<TransactionStore>()(
                   useLogStore.getState().createLog(itemLogEntry)
                 }
 
+                // FIXED: Only deduct stock if status is 'completed'
                 if (transaction.status === 'completed') {
                   const stockToUpdate = stocks.find((s) => s.id === item.stockId)
 
@@ -294,19 +296,25 @@ export const useTransactionStore = create<TransactionStore>()(
       }
     },
 
+    // FIXED: Corrected signature to accept transactionId
     updateStockQuantities: async (
+      transactionId: string,
       oldStatus?: string,
       newStatus?: string
     ) => {
       try {
-        const items = get().currentItems
+        // Fetch items for this transaction
+        const itemsResponse = await window.context.transactions.getItems(transactionId)
+        const items = itemsResponse.success && itemsResponse.items ? itemsResponse.items : []
+        
         if (items.length === 0) {
           return true
         }
 
         let multiplier = 0
 
-        // Pending → Completed: deduct stock
+        // Determine stock adjustment multiplier based on status change
+        // Pending → Completed: deduct stock (multiplier = -1)
         if (oldStatus === 'pending' && newStatus === 'completed') {
           multiplier = -1
         }
@@ -314,11 +322,11 @@ export const useTransactionStore = create<TransactionStore>()(
         else if (oldStatus === 'pending' && newStatus === 'cancelled') {
           multiplier = 0
         }
-        // Completed → Cancelled: restore stock
+        // Completed → Cancelled: restore stock (multiplier = +1)
         else if (oldStatus === 'completed' && newStatus === 'cancelled') {
           multiplier = 1
         }
-        // Completed → Pending: restore stock
+        // Completed → Pending: restore stock (multiplier = +1)
         else if (oldStatus === 'completed' && newStatus === 'pending') {
           multiplier = 1
         }
@@ -326,7 +334,7 @@ export const useTransactionStore = create<TransactionStore>()(
         else if (oldStatus === 'cancelled' && newStatus === 'pending') {
           multiplier = 0
         }
-        // Cancelled → Completed: deduct stock
+        // Cancelled → Completed: deduct stock (multiplier = -1)
         else if (oldStatus === 'cancelled' && newStatus === 'completed') {
           multiplier = -1
         }
@@ -338,6 +346,7 @@ export const useTransactionStore = create<TransactionStore>()(
             const stockToUpdate = stocks.find((s) => s.id === item.stockId)
 
             if (stockToUpdate) {
+              // If multiplier is -1, we deduct; if +1, we add
               const newQuantity = Math.max(0, stockToUpdate.quantity + item.quantity * multiplier)
               let newStatus: StockStatus = 'In Stock'
 
@@ -374,6 +383,7 @@ export const useTransactionStore = create<TransactionStore>()(
 
         const response = await window.context.transactions.update(id, transaction)
         if (response.success) {
+          // Handle status changes and stock updates
           if (oldStatus !== newStatus && newStatus) {
             await get().updateStockQuantities(id, oldStatus, newStatus)
           }
@@ -491,6 +501,7 @@ export const useTransactionStore = create<TransactionStore>()(
             useLogStore.getState().createLog(logEntry)
           }
 
+          // Only adjust stock if transaction is completed and quantity changed
           if (
             currentTransaction?.status === 'completed' &&
             oldItem &&
@@ -503,6 +514,8 @@ export const useTransactionStore = create<TransactionStore>()(
               const stockToUpdate = stocks.find((s) => s.id === oldItem.stockId)
 
               if (stockToUpdate) {
+                // If quantityDiff is positive, we're adding more items (deduct more stock)
+                // If quantityDiff is negative, we're reducing items (restore stock)
                 const newQuantity = Math.max(0, stockToUpdate.quantity - quantityDiff)
                 let newStatus: StockStatus = 'In Stock'
 
@@ -543,6 +556,7 @@ export const useTransactionStore = create<TransactionStore>()(
         const transactionToDelete =
           get().transactions.find((t) => t.id === id) || get().currentTransaction
 
+        // If transaction was completed, restore stock before deleting
         if (transactionToDelete?.status === 'completed') {
           await get().updateStockQuantities(id, 'completed', 'cancelled')
         }
@@ -623,6 +637,7 @@ export const useTransactionStore = create<TransactionStore>()(
             useLogStore.getState().createLog(logEntry)
           }
 
+          // If transaction is completed, restore stock when item is deleted
           if (currentTransaction?.status === 'completed' && itemToRemove) {
             const { stocks, updateStock, fetchStocks } = useStockStore.getState()
             const stockToUpdate = stocks.find((s) => s.id === itemToRemove.stockId)

@@ -14,20 +14,13 @@ import {
   InputNumber,
   Divider,
   notification,
-  Tag,
   Alert
 } from 'antd'
 import { useState, useEffect } from 'react'
 import { FormMode } from '@/renderer/src/lib/types'
 import { useTransactionStore } from '@/renderer/src/store/transactionStore'
-import { useAuthStore } from '@/renderer/src/store/authStore'
 import { useStockStore } from '@/renderer/src/store/stockStore'
-import {
-  Transaction,
-  TransactionItem,
-  TransactionFormData,
-  TransactionItemFormData
-} from '../types'
+import { Transaction, TransactionFormData } from '../types'
 import { EditOutlined, DeleteOutlined, PlusOutlined, WarningOutlined } from '@ant-design/icons'
 import { formatCurrency } from '@/renderer/src/lib/utils'
 import { units } from '@/renderer/src/pages/Stocks/types'
@@ -63,7 +56,6 @@ export default function TransactionForm({ open, onClose, mode, selected }: Trans
 
   const [localItems, setLocalItems] = useState<LocalItem[]>([])
 
-  const { user } = useAuthStore()
   const { stocks, fetchStocks } = useStockStore()
   const {
     createTransaction,
@@ -106,7 +98,7 @@ export default function TransactionForm({ open, onClose, mode, selected }: Trans
 
   useEffect(() => {
     setStatusChanged(false)
-    setLocalItems([]) 
+    setLocalItems([])
 
     if (open) {
       if (currentTransaction && (isEditMode || isViewMode || isDeleteMode)) {
@@ -133,6 +125,10 @@ export default function TransactionForm({ open, onClose, mode, selected }: Trans
   }
 
   const handleStatusChange = (newStatus: string) => {
+    if (isAddMode) {
+      return
+    }
+
     const oldStatus = currentTransaction?.status
     if (oldStatus && oldStatus !== newStatus) {
       setStatusChanged(true)
@@ -222,9 +218,12 @@ export default function TransactionForm({ open, onClose, mode, selected }: Trans
 
         const transactionId = await createTransaction(newTransaction as Transaction, localItems)
         if (transactionId) {
+          const statusMessage =
+            values.status === 'completed' ? 'Stock quantities have been deducted.' : ''
+
           notification.success({
             message: 'Transaction created successfully',
-            description: `Created with ${localItems.length} item(s)`
+            description: `Created with ${localItems.length} item(s). ${statusMessage}`
           })
           onClose()
         } else {
@@ -248,122 +247,68 @@ export default function TransactionForm({ open, onClose, mode, selected }: Trans
         return
       }
 
-      if (editingItem) {
-        setLocalItems((prev) =>
-          prev.map((item) =>
-            item.tempId === editingItem
-              ? {
-                  ...item,
-                  stockId: values.stockId,
-                  stockName: stock.name,
-                  quantity: values.quantity,
-                  unit: values.unit,
-                  unitPrice: values.unitPrice
-                }
-              : item
-          )
-        )
-        notification.success({ message: 'Item updated' })
-      } else {
-        const newItem: LocalItem = {
-          tempId: `temp-${Date.now()}`,
-          stockId: values.stockId,
-          stockName: stock.name,
-          quantity: values.quantity,
-          unit: values.unit,
-          unitPrice: values.unitPrice
-        }
-        setLocalItems((prev) => [...prev, newItem])
-        notification.success({ message: 'Item added' })
+      const tempId = `temp-${Date.now()}`
+      const newItem: LocalItem = {
+        tempId,
+        stockId: values.stockId,
+        stockName: stock.name,
+        quantity: values.quantity,
+        unit: values.unit || stock.unit,
+        unitPrice: values.unitPrice
       }
 
+      setLocalItems([...localItems, newItem])
+      setAddingItem(false)
+      itemForm.resetFields()
+    } catch (error) {
+      console.error('Validation error:', error)
+    }
+  }
+
+  const handleEditLocalItem = async (tempId: string) => {
+    try {
+      const values = await itemForm.validateFields()
+      const stock = stocks.find((s) => s.id === values.stockId)
+
+      if (!stock) {
+        notification.error({ message: 'Stock not found' })
+        return
+      }
+
+      setLocalItems(
+        localItems.map((item) =>
+          item.tempId === tempId
+            ? {
+                ...item,
+                stockId: values.stockId,
+                stockName: stock.name,
+                quantity: values.quantity,
+                unit: values.unit || stock.unit,
+                unitPrice: values.unitPrice
+              }
+            : item
+        )
+      )
       setAddingItem(false)
       setEditingItem(null)
       itemForm.resetFields()
     } catch (error) {
-      console.error('Item form validation error:', error)
+      console.error('Validation error:', error)
     }
-  }
-
-  const handleAddItem = async () => {
-    if (isAddMode) {
-      await handleAddLocalItem()
-      return
-    }
-
-    try {
-      const values = await itemForm.validateFields()
-
-      if (!currentTransaction && !values.transactionId) {
-        notification.error({ message: 'Cannot add item: No transaction ID specified' })
-        return
-      }
-
-      const transactionId = currentTransaction?.id || values.transactionId
-      const newItem: TransactionItemFormData = {
-        transactionId,
-        stockId: values.stockId,
-        quantity: values.quantity,
-        unitPrice: values.unitPrice,
-        unit: values.unit
-      }
-
-      let success = false
-      if (editingItem) {
-        success = await updateTransactionItem(editingItem, newItem)
-        if (success) {
-          let description = 'Item updated successfully'
-          if (currentTransaction?.status === 'completed') {
-            description += '. Stock quantities have been adjusted.'
-          }
-          notification.success({
-            message: 'Success',
-            description
-          })
-          setAddingItem(false)
-          setEditingItem(null)
-          itemForm.resetFields()
-          fetchStocks()
-        }
-      } else {
-        const itemId = await addTransactionItem(newItem)
-        if (itemId) {
-          let description = 'Item added successfully'
-          if (currentTransaction?.status === 'completed') {
-            description += '. Stock quantity has been deducted.'
-          }
-          notification.success({
-            message: 'Success',
-            description
-          })
-          setAddingItem(false)
-          itemForm.resetFields()
-          fetchStocks()
-        }
-      }
-    } catch (error) {
-      console.error('Item form validation error:', error)
-    }
-  }
-
-  const handleEditLocalItem = (item: LocalItem) => {
-    setEditingItem(item.tempId)
-    setAddingItem(true)
-    itemForm.setFieldsValue({
-      stockId: item.stockId,
-      quantity: item.quantity,
-      unit: item.unit,
-      unitPrice: item.unitPrice
-    })
   }
 
   const handleDeleteLocalItem = (tempId: string) => {
-    setLocalItems((prev) => prev.filter((item) => item.tempId !== tempId))
-    notification.success({ message: 'Item removed' })
+    setLocalItems(localItems.filter((item) => item.tempId !== tempId))
   }
 
-  const handleEditItem = (item: TransactionItem) => {
-    setEditingItem(item.id)
+  const handleEditDbItem = async (itemId: string) => {
+    const item = currentItems.find((i) => i.id === itemId)
+    if (!item) return
+
+    const stock = stocks.find((s) => s.id === item.stockId)
+    setSelectedStock(stock)
+
+    setEditingItem(itemId)
     setAddingItem(true)
     itemForm.setFieldsValue({
       stockId: item.stockId,
@@ -373,88 +318,72 @@ export default function TransactionForm({ open, onClose, mode, selected }: Trans
     })
   }
 
-  const handleDeleteItem = async (itemId: string) => {
+  const handleAddDbItem = async () => {
+    try {
+      const values = await itemForm.validateFields()
+
+      if (editingItem) {
+        const success = await updateTransactionItem(editingItem, values)
+        if (success) {
+          notification.success({ message: 'Item updated successfully' })
+          setAddingItem(false)
+          setEditingItem(null)
+          itemForm.resetFields()
+        }
+      } else {
+        if (!currentTransaction) {
+          notification.error({ message: 'No transaction selected' })
+          return
+        }
+
+        const itemData = {
+          transactionId: currentTransaction.id,
+          stockId: values.stockId,
+          quantity: values.quantity,
+          unit: values.unit,
+          unitPrice: values.unitPrice
+        }
+
+        const itemId = await addTransactionItem(itemData)
+        if (itemId) {
+          notification.success({ message: 'Item added successfully' })
+          setAddingItem(false)
+          itemForm.resetFields()
+        }
+      }
+    } catch (error) {
+      console.error('Validation error:', error)
+    }
+  }
+
+  const handleAddItem = () => {
+    if (isAddMode) {
+      if (editingItem) {
+        handleEditLocalItem(editingItem)
+      } else {
+        handleAddLocalItem()
+      }
+    } else {
+      handleAddDbItem()
+    }
+  }
+
+  const handleDeleteDbItem = async (itemId: string) => {
     const success = await deleteTransactionItem(itemId)
     if (success) {
-      let description = 'Item removed successfully'
-      if (currentTransaction?.status === 'completed') {
-        description += '. Stock quantity has been restored.'
-      }
-      notification.success({
-        message: 'Success',
-        description
-      })
-      fetchStocks()
+      notification.success({ message: 'Item removed successfully' })
     }
   }
 
-  const handleStockChange = (value: string) => {
-    const selected = stocks.find((s) => s.id === value)
-    if (selected) {
-      setSelectedStock(selected)
+  const handleStockChange = (stockId: string) => {
+    const stock = stocks.find((s) => s.id === stockId)
+    setSelectedStock(stock)
+    if (stock) {
       itemForm.setFieldsValue({
-        unit: selected.unit,
-        unitPrice: selected.unitPrice
+        unit: stock.unit,
+        unitPrice: stock.unitPrice || 0
       })
     }
-  }
-
-  const itemColumns = [
-    {
-      title: 'Item',
-      dataIndex: 'stockName',
-      key: 'stockName'
-    },
-    {
-      title: 'Quantity',
-      dataIndex: 'quantity',
-      key: 'quantity'
-    },
-    {
-      title: 'Unit',
-      dataIndex: 'unit',
-      key: 'unit'
-    },
-    {
-      title: 'Unit Price',
-      dataIndex: 'unitPrice',
-      key: 'unitPrice',
-      render: (price: number) => formatCurrency(price)
-    },
-    {
-      title: 'Total',
-      key: 'total',
-      render: (_: any, record: any) => formatCurrency(record.quantity * record.unitPrice)
-    },
-    {
-      title: 'Actions',
-      key: 'actions',
-      render: (_: any, record: any) =>
-        !isViewMode && !isDeleteMode ? (
-          <Space>
-            <Button
-              icon={<EditOutlined />}
-              type="text"
-              onClick={() => (isAddMode ? handleEditLocalItem(record) : handleEditItem(record))}
-            />
-            <Button
-              icon={<DeleteOutlined />}
-              type="text"
-              danger
-              onClick={() =>
-                isAddMode ? handleDeleteLocalItem(record.tempId) : handleDeleteItem(record.id)
-              }
-            />
-          </Space>
-        ) : null
-    }
-  ]
-
-  const modalTitle = () => {
-    if (isViewMode) return `View Transaction - ${currentTransaction?.id || ''}`
-    if (isEditMode) return `Edit Transaction - ${currentTransaction?.id || ''}`
-    if (isDeleteMode) return `Delete Transaction - ${currentTransaction?.id || ''}`
-    return 'Create New Transaction'
   }
 
   const statusChangeInfo = getStatusChangeMessage()
@@ -463,9 +392,90 @@ export default function TransactionForm({ open, onClose, mode, selected }: Trans
     ? localItems.map((item) => ({ ...item, key: item.tempId }))
     : currentItems.map((item) => ({ ...item, key: item.id }))
 
+  const itemColumns = [
+    {
+      title: 'Product',
+      dataIndex: 'stockName',
+      key: 'stockName'
+    },
+    {
+      title: 'Quantity',
+      dataIndex: 'quantity',
+      key: 'quantity',
+      render: (qty: number, record: any) => `${qty} ${record.unit}`
+    },
+    {
+      title: 'Unit Price',
+      dataIndex: 'unitPrice',
+      key: 'unitPrice',
+      render: (price: number) => formatCurrency(price)
+    },
+    {
+      title: 'Subtotal',
+      key: 'subtotal',
+      render: (_: any, record: any) => formatCurrency(record.quantity * record.unitPrice)
+    },
+    {
+      title: 'Actions',
+      key: 'actions',
+      hidden: isViewMode || isDeleteMode,
+      render: (_: any, record: any) => {
+        const isLocalItem = 'tempId' in record
+
+        return (
+          <Space>
+            <Button
+              icon={<EditOutlined />}
+              size="small"
+              onClick={() => {
+                if (isLocalItem) {
+                  const item = localItems.find((i) => i.tempId === record.tempId)
+                  if (item) {
+                    const stock = stocks.find((s) => s.id === item.stockId)
+                    setSelectedStock(stock)
+                    setEditingItem(record.tempId)
+                    setAddingItem(true)
+                    itemForm.setFieldsValue({
+                      stockId: item.stockId,
+                      quantity: item.quantity,
+                      unit: item.unit,
+                      unitPrice: item.unitPrice
+                    })
+                  }
+                } else {
+                  handleEditDbItem(record.id)
+                }
+              }}
+            />
+            <Button
+              danger
+              icon={<DeleteOutlined />}
+              size="small"
+              onClick={() => {
+                if (isLocalItem) {
+                  handleDeleteLocalItem(record.tempId)
+                } else {
+                  handleDeleteDbItem(record.id)
+                }
+              }}
+            />
+          </Space>
+        )
+      }
+    }
+  ].filter((col) => !col.hidden)
+
   return (
     <Modal
-      title={modalTitle()}
+      title={
+        isViewMode
+          ? 'View Transaction'
+          : isEditMode
+            ? 'Edit Transaction'
+            : isDeleteMode
+              ? 'Delete Transaction'
+              : 'New Transaction'
+      }
       open={open}
       onCancel={onClose}
       width={900}
@@ -474,13 +484,7 @@ export default function TransactionForm({ open, onClose, mode, selected }: Trans
           Cancel
         </Button>,
         !isViewMode && (
-          <Button
-            key="submit"
-            type={isDeleteMode ? 'primary' : 'primary'}
-            danger={isDeleteMode}
-            loading={submitting}
-            onClick={handleSubmit}
-          >
+          <Button key="submit" type="primary" onClick={handleSubmit} loading={submitting}>
             {isDeleteMode ? 'Delete' : isEditMode ? 'Update' : 'Create'}
           </Button>
         )
@@ -490,12 +494,12 @@ export default function TransactionForm({ open, onClose, mode, selected }: Trans
         <Row gutter={16}>
           <Col span={12}>
             <Form.Item name="customerName" label="Customer Name">
-              <Input placeholder="Customer Name" />
+              <Input placeholder="Enter customer name (optional)" />
             </Form.Item>
           </Col>
           <Col span={12}>
-            <Form.Item name="referenceNo" label="Reference Number">
-              <Input placeholder="Optional reference number" />
+            <Form.Item name="referenceNo" label="Reference No.">
+              <Input placeholder="Enter reference number (optional)" />
             </Form.Item>
           </Col>
         </Row>
@@ -506,14 +510,27 @@ export default function TransactionForm({ open, onClose, mode, selected }: Trans
               label="Status"
               rules={[{ required: true, message: 'Please select status' }]}
             >
-              <Select disabled={isAddMode} onChange={handleStatusChange}>
+              <Select disabled={isViewMode || isDeleteMode} onChange={handleStatusChange}>
                 <Option value="pending">Pending</Option>
                 <Option value="completed">Completed</Option>
-                <Option value="cancelled">Cancelled</Option>
+                {!isAddMode && <Option value="cancelled">Cancelled</Option>}
               </Select>
             </Form.Item>
           </Col>
         </Row>
+
+        {isAddMode &&
+          transactionForm.getFieldValue('status') === 'completed' &&
+          localItems.length > 0 && (
+            <Alert
+              message="Stock Deduction Notice"
+              description="This transaction will be created as completed. Stock quantities will be immediately deducted."
+              type="warning"
+              showIcon
+              icon={<WarningOutlined />}
+              style={{ marginBottom: 16 }}
+            />
+          )}
 
         {statusChanged && statusChangeInfo && (
           <Alert
@@ -531,7 +548,6 @@ export default function TransactionForm({ open, onClose, mode, selected }: Trans
         </Form.Item>
       </Form>
 
-      {/* Transaction Items Section */}
       <div style={{ marginTop: 24 }}>
         <Divider orientation="left">Transaction Items</Divider>
 

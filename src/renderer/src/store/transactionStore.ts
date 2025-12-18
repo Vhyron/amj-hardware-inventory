@@ -588,7 +588,6 @@ export const useTransactionStore = create<TransactionStore>()(
               const stockToUpdate = stocks.find((s) => s.id === oldItem.stockId)
 
               if (stockToUpdate) {
-              
                 const newQuantity = Math.max(0, stockToUpdate.quantity - quantityDiff)
                 let newStatus: StockStatus = 'In Stock'
 

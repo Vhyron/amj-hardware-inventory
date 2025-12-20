@@ -30,6 +30,7 @@ class DatabaseManager {
     const userDataPath = app.getPath('userData')
     const dbPath = path.join(userDataPath, 'inventory.db')
 
+
     // Ensure the directory exists
     const dbDir = path.dirname(dbPath)
     if (!fs.existsSync(dbDir)) {

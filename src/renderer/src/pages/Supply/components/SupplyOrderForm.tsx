@@ -12,9 +12,7 @@ import {
   InputNumber,
   Divider,
   notification,
-  Tag,
-  Alert,
-  App
+  Alert
 } from 'antd'
 import { useState, useEffect } from 'react'
 import { FormMode } from '@/renderer/src/lib/types'
@@ -23,7 +21,7 @@ import { useSupplierStore } from '@/renderer/src/store/supplierStore'
 import { useAuthStore } from '@/renderer/src/store/authStore'
 import { useStockStore } from '@/renderer/src/store/stockStore'
 import { useCategoryStore } from '@/renderer/src/store/categoryStore'
-import { SupplyOrder, OrderItem, SupplyOrderFormData, OrderItemFormData } from '../types'
+import { SupplyOrder, OrderItem, OrderItemFormData } from '../types'
 import { EditOutlined, DeleteOutlined, PlusOutlined } from '@ant-design/icons'
 import { formatCurrency } from '@/renderer/src/lib/utils'
 import { units } from '@/renderer/src/pages/Stocks/types'
@@ -47,7 +45,6 @@ export default function SupplyOrderForm({ open, onClose, mode, selected }: Suppl
   const [selectedStock, setSelectedStock] = useState<any>(null)
   const [editingItem, setEditingItem] = useState<string | null>(null)
   const [currentSupplierId, setCurrentSupplierId] = useState<string>('')
-  const [tempItems, setTempItems] = useState<OrderItemFormData[]>([])
 
   // New state variables for custom confirmation dialog
   const [confirmModalVisible, setConfirmModalVisible] = useState(false)
@@ -208,8 +205,7 @@ export default function SupplyOrderForm({ open, onClose, mode, selected }: Suppl
   }
 
   const calculateTotalCost = () => {
-    const items = isAddMode ? tempItems : orderItems
-    return items.reduce((total, item) => total + item.quantity * item.unitPrice, 0)
+    return orderItems.reduce((total, item) => total + item.quantity * item.unitPrice, 0)
   }
 
   const handleSubmit = async () => {
@@ -243,17 +239,17 @@ export default function SupplyOrderForm({ open, onClose, mode, selected }: Suppl
           onClose()
         }
       } else if (isAddMode) {
-        const values = await orderForm.validateFields()
+        // Handle create order
+        // Initialize with submitted values plus calculated total and user info
         const newOrder = {
           ...values,
+          status: 'Pending',
           orderedBy: user?.username || 'unknown',
-          totalCost: calculateTotalCost()
+          totalCost: 0 // Initial cost is 0, will be updated as items are added
         }
+
         const orderId = await createOrder(newOrder)
         if (orderId) {
-          for (const item of tempItems) {
-            await createOrderItem({ ...item, orderId })
-          }
           notification.success({ message: 'Order created successfully' })
           onClose()
         } else {
@@ -271,8 +267,15 @@ export default function SupplyOrderForm({ open, onClose, mode, selected }: Suppl
     try {
       const values = await itemForm.validateFields()
 
+      // Make sure we have the necessary data
+      if (!currentOrder && !values.orderId) {
+        notification.error({ message: 'Cannot add item: No order ID specified' })
+        return
+      }
+
+      const orderId = currentOrder?.id || values.orderId
       const newItem: OrderItemFormData = {
-        orderId: currentOrder?.id || '', // empty for now if new order
+        orderId,
         name: values.name,
         sku: values.sku,
         stockId: values.stockId || undefined,
@@ -283,25 +286,18 @@ export default function SupplyOrderForm({ open, onClose, mode, selected }: Suppl
         unitPrice: values.unitPrice
       }
 
-      if (isAddMode) {
-        // For new unsaved order — store locally
-        setTempItems((prev) => [...prev, newItem])
-        notification.success({ message: 'Item added (unsaved order)' })
-        setAddingItem(false)
-        itemForm.resetFields()
-        return
-      }
-
       let success = false
       if (editingItem) {
+        // Update existing item
         success = await updateOrderItem(editingItem, newItem)
         if (success) {
           notification.success({ message: 'Item updated successfully' })
-          setEditingItem(null)
           setAddingItem(false)
+          setEditingItem(null)
           itemForm.resetFields()
         }
       } else {
+        // Add new item
         const itemId = await createOrderItem(newItem)
         if (itemId) {
           notification.success({ message: 'Item added successfully' })
@@ -470,10 +466,10 @@ export default function SupplyOrderForm({ open, onClose, mode, selected }: Suppl
           </Col>
           <Col span={12}>
             <Form.Item name="status" label="Status">
-              <Select>
+              <Select disabled={isAddMode}>
                 <Option value="Pending">Pending</Option>
                 <Option value="Approved">Approved</Option>
-                {!isAddMode && <Option value="Delivered">Delivered</Option>}
+                <Option value="Delivered">Delivered</Option>
                 <Option value="Cancelled">Cancelled</Option>
               </Select>
             </Form.Item>
@@ -484,7 +480,8 @@ export default function SupplyOrderForm({ open, onClose, mode, selected }: Suppl
         </Form.Item>
       </Form>
 
-      {(isAddMode || isEditMode || isViewMode || isDeleteMode) && (
+      {/* Show Order Items Section for View/Edit/Delete modes */}
+      {(isViewMode || isEditMode || isDeleteMode) && (
         <div style={{ marginTop: 24 }}>
           <Divider orientation="left">Order Items</Divider>
           <div
@@ -512,11 +509,7 @@ export default function SupplyOrderForm({ open, onClose, mode, selected }: Suppl
           </div>
           <Table
             columns={itemColumns}
-            dataSource={
-              (isAddMode
-                ? tempItems.map((item, index) => ({ ...item, key: index }))
-                : orderItems.map((item) => ({ ...item, key: item.id }))) as any
-            }
+            dataSource={orderItems.map((item) => ({ ...item, key: item.id }))}
             size="small"
             bordered
             pagination={false}
@@ -688,10 +681,10 @@ export default function SupplyOrderForm({ open, onClose, mode, selected }: Suppl
       )}
 
       {/* Create Item UI for adding mode when no items exist yet */}
-      {isAddMode && tempItems.length === 0 && (
+      {isAddMode && (
         <div style={{ marginTop: 24, textAlign: 'center' }}>
-          <Title level={5}>No items added yet</Title>
-          <p>Click “Add Item” to add your first product to this transaction.</p>
+          <Title level={5}>Please save the order first to add items</Title>
+          <p>After creating the order, you can add items to it.</p>
         </div>
       )}
 

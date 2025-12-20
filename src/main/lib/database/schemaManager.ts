@@ -7,6 +7,7 @@ import { supplyOrdersSchema, supplyOrderItemsSchema } from './schemas/supplyOrde
 import { transactionItemsSchema, transactionSchema } from './schemas/transactions'
 import { activityLogsSchema } from './schemas/activityLogs'
 
+
 export class SchemaManager {
   private db: Database.Database
 

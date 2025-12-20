@@ -1,5 +1,5 @@
 import { Spin } from "antd";
-import logo from '@/renderer/src/assets/logo_name.png'
+import logo from '@/renderer/src/assets/tempo-amj.png'
 
 export default function SplashScreen() {
 	return (

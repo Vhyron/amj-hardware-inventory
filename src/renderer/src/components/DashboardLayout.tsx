@@ -13,7 +13,7 @@ import {
   // @ts-ignore
 } from '@hugeicons/core-free-icons'
 import { useAuthStore } from '../store/authStore'
-import logo from '@/renderer/src/assets/logo.png'
+import logo from '@/renderer/src/assets/tempo-amj.png'
 
 const { Sider, Content } = Layout
 const drawerWidth = 270
@@ -113,7 +113,7 @@ export default function DashboardLayout() {
             }}
           />
           <Typography.Text style={{ fontSize: 17, whiteSpace: 'nowrap', fontWeight: 500 }}>
-            Fagan Glass Inventory
+            AMJ Hardware IMS
           </Typography.Text>
         </div>
 

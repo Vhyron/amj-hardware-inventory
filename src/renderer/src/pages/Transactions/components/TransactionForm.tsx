@@ -11,13 +11,11 @@ import {
   Col,
   InputNumber,
   Divider,
-  notification,
-  Tag
+  notification
 } from 'antd'
 import { useState, useEffect } from 'react'
 import { FormMode } from '@/renderer/src/lib/types'
 import { useTransactionStore } from '@/renderer/src/store/transactionStore'
-import { useAuthStore } from '@/renderer/src/store/authStore'
 import { useStockStore } from '@/renderer/src/store/stockStore'
 import {
   Transaction,
@@ -50,7 +48,6 @@ export default function TransactionForm({ open, onClose, mode, selected }: Trans
   const [tempItems, setTempItems] = useState<TransactionItemFormData[]>([])
   const [originalStatus, setOriginalStatus] = useState<string | null>(null)
 
-  const { user } = useAuthStore()
   const { stocks, fetchStocks } = useStockStore()
   const {
     createTransaction,
@@ -438,7 +435,11 @@ export default function TransactionForm({ open, onClose, mode, selected }: Trans
               label="Status"
               rules={[{ required: true, message: 'Please select status' }]}
             >
+<<<<<<< HEAD
               <Select>
+=======
+              <Select disabled={isAddMode || isViewMode || isDeleteMode}>
+>>>>>>> 9a1a650753c5659ce13c7a2e4b8862c6798519d9
                 <Option value="pending">Pending</Option>
                 <Option value="completed">Completed</Option>
                 <Option value="cancelled">Cancelled</Option>
@@ -567,7 +568,11 @@ export default function TransactionForm({ open, onClose, mode, selected }: Trans
                 }
               >
                 {stocks
+<<<<<<< HEAD
                   .filter((stock) => stock.quantity > 0)
+=======
+                  .filter((stock) => stock.quantity > 0) // Filter out stocks with zero quantity
+>>>>>>> 9a1a650753c5659ce13c7a2e4b8862c6798519d9
                   .map((stock) => (
                     <Option key={stock.id} value={stock.id}>
                       {stock.name} - {stock.sku} ({stock.quantity} {stock.unit} available)
@@ -624,7 +629,12 @@ export default function TransactionForm({ open, onClose, mode, selected }: Trans
         </Modal>
       )}
 
+<<<<<<< HEAD
       {isAddMode && tempItems.length === 0 && (
+=======
+      {/* Create Item UI for adding mode when no items exist yet */}
+      {isAddMode && (
+>>>>>>> 9a1a650753c5659ce13c7a2e4b8862c6798519d9
         <div style={{ marginTop: 24, textAlign: 'center' }}>
           <Title level={5}>No items added yet</Title>
           <p>Click "Add Item" to add your first product to this transaction.</p>

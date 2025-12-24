@@ -38,7 +38,10 @@ export default function SalesTab() {
 
   // Compute total income
   const totalIncome = useMemo(() => {
-    return filteredTransactions.reduce((sum, t) => sum + (t.totalAmount || 0), 0)
+    // Only include transactions with "completed" status in the total amount
+    return filteredTransactions
+      .filter((t) => t.status === 'completed')
+      .reduce((sum, t) => sum + (t.totalAmount || 0), 0)
   }, [filteredTransactions])
 
   // Handle reset back to today’s date

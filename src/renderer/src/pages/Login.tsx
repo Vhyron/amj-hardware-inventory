@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useLoadingStore } from '../store/loadingStore'
 import { useAuthStore } from '../store/authStore'
-import logo from '@/renderer/src/assets/logo_name.png'
+import logo from '@/renderer/src/assets/amj-logo.png'
 
 export default function Login() {
   const [form] = Form.useForm()
@@ -61,16 +61,17 @@ export default function Login() {
       }}
     >
       <Card style={{ width: 400, boxShadow: '0 4px 12px rgba(0,0,0,0.15)', borderRadius: 12, position: 'relative' }}>
-        <div>
+        <div style={{ textAlign: 'center', marginBottom: 8 }}>
           <img
             src={logo}
             style={{
               objectFit: 'contain',
               width: '100%',
               height: 140,
-              marginBottom: 14
+              marginBottom: 8
             }}
           />
+          <div style={{ fontSize: 20, fontWeight: 700, marginTop: 6 }}>AMJ HARDWARE INVENTORY</div>
         </div>
         {errors?.result && (
           <Alert message={errors.result} type="error" showIcon style={{ marginBottom: 16 }} />

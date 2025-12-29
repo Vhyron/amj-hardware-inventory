@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Card, DatePicker, Flex, Typography, Statistic, Table, Tag, Button, Empty } from 'antd'
+import { Card, DatePicker, Flex, Typography, Statistic, Table, Tag, Button, Empty, Select } from 'antd'
 import { ReloadOutlined } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import { formatCurrency } from '@/renderer/src/lib/utils'
@@ -15,6 +15,8 @@ export default function SalesTab() {
   const todayStart = dayjs().startOf('day')
   const todayEnd = dayjs().endOf('day')
   const [dateRange, setDateRange] = useState<[dayjs.Dayjs, dayjs.Dayjs]>([todayStart, todayEnd])
+  // Selected transaction statuses to display and include in totals
+  const [selectedStatuses, setSelectedStatuses] = useState<string[]>(['completed'])
 
   // Fetch transactions when the component mounts
   useEffect(() => {
@@ -29,12 +31,14 @@ export default function SalesTab() {
 
     return transactions.filter((t) => {
       const transactionDate = dayjs(t.createdAt)
-      return (
+      const inDateRange =
         transactionDate.isAfter(dateRange[0].startOf('day')) &&
         transactionDate.isBefore(dateRange[1].endOf('day'))
-      )
+      // If no statuses selected, show no transactions. Otherwise include only selected statuses.
+      const matchesStatus = selectedStatuses.length === 0 ? false : selectedStatuses.includes(t.status)
+      return inDateRange && matchesStatus
     })
-  }, [transactions, dateRange])
+  }, [transactions, dateRange, selectedStatuses])
 
   // Compute total income
   const totalIncome = useMemo(() => {
@@ -101,6 +105,18 @@ export default function SalesTab() {
                 setDateRange(values as [dayjs.Dayjs, dayjs.Dayjs])
             }}
             allowClear={false}
+          />
+          <Select
+            mode="multiple"
+            placeholder="Select statuses"
+            value={selectedStatuses}
+            onChange={(vals) => setSelectedStatuses(vals as string[])}
+            style={{ minWidth: 220 }}
+            options={[
+              { label: 'Completed', value: 'completed' },
+              { label: 'Pending', value: 'pending' },
+              { label: 'Cancelled', value: 'cancelled' }
+            ]}
           />
           <Button icon={<ReloadOutlined />} onClick={handleReset}>
             Today

@@ -1,6 +1,6 @@
+import { CheckCircleOutlined, CloseCircleOutlined } from '@ant-design/icons'
 import type { GetProp, PaginationProps, TableProps } from 'antd'
 import { Button, Table, Tooltip } from 'antd'
-import { CheckCircleOutlined, CloseCircleOutlined } from '@ant-design/icons'
 import { ReactNode } from 'react'
 
 type SizeType = TableProps['size']
@@ -22,7 +22,7 @@ export interface TableActionOption {
 export const generateColumns = <T extends object>(
   data: Array<T> | any,
   onClick: (record: T, option?: any) => void,
-  options?: TableActionOption[],
+  options?: TableActionOption[] | ((record: T) => TableActionOption[]),
   filterKeys?: (keyof T)[],
   linkKey?: string
 ) => {
@@ -160,20 +160,25 @@ export const generateColumns = <T extends object>(
     columns.push({
       dataIndex: 'actions',
       key: 'actions',
-      render: (_, record) => (
-        <div style={{ display: 'flex', justifyContent: 'center' }}>
-          {options?.map((v: TableActionOption, i: number) => (
-            <Tooltip key={i} title={v.label}>
-              <Button
-                icon={v.icon}
-                onClick={() => onClick(record, v.key)}
-                style={{ marginRight: 10 }}
-                disabled={v.disabled}
-              />
-            </Tooltip>
-          ))}
-        </div>
-      )
+      render: (_, record) => {
+        // Get options for this specific record
+        const recordOptions = typeof options === 'function' ? options(record) : options
+
+        return (
+          <div style={{ display: 'flex', justifyContent: 'center' }}>
+            {recordOptions?.map((v: TableActionOption, i: number) => (
+              <Tooltip key={i} title={v.label}>
+                <Button
+                  icon={v.icon}
+                  onClick={() => onClick(record, v.key)}
+                  style={{ marginRight: 10 }}
+                  disabled={v.disabled}
+                />
+              </Tooltip>
+            ))}
+          </div>
+        )
+      }
     })
   }
 

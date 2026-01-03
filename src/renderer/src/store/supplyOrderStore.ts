@@ -1,10 +1,10 @@
 import { create } from 'zustand'
-import { SupplyOrder, OrderItem } from '../pages/Supply/types'
-import { useStockStore } from './stockStore'
 import { generatePrefixedUUID } from '../lib/uuid'
+import { Stock } from '../pages/Stocks/types'
+import { OrderItem, SupplyOrder } from '../pages/Supply/types'
 import { useLogStore } from './activityLogStore'
 import { useAuthStore } from './authStore'
-import { Stock } from '../pages/Stocks/types'
+import { useStockStore } from './stockStore'
 
 interface SupplyOrderState {
   orders: SupplyOrder[]
@@ -25,6 +25,10 @@ interface SupplyOrderState {
   createOrder: (
     order: Omit<SupplyOrder, 'id' | 'createdAt' | 'updatedAt'>
   ) => Promise<string | null>
+  createOrderWithItems: (
+    order: Omit<SupplyOrder, 'id' | 'createdAt' | 'updatedAt'>,
+    items: Omit<OrderItem, 'id' | 'orderId' | 'createdAt' | 'updatedAt'>[]
+  ) => Promise<{ orderId: string | null; error?: string }>
   createOrderItem: (
     item: Omit<OrderItem, 'id' | 'createdAt' | 'updatedAt'>
   ) => Promise<string | null>
@@ -155,6 +159,130 @@ export const useSupplyOrderStore = create<SupplyOrderState>((set, get) => ({
     }
   },
 
+  createOrderWithItems: async (order, items) => {
+    set({ loading: true, error: null })
+    try {
+      const response = await window.context.supplyOrders.create(order)
+      if (!response.success || !response.orderId) {
+        set({ error: response.message || 'Failed to create order' })
+        return { orderId: null, error: response.message || 'Failed to create order' }
+      }
+
+      const orderId = response.orderId
+
+      const createdItems: OrderItem[] = []
+      for (const item of items) {
+        const itemResponse = await window.context.supplyOrders.addItem({
+          ...item,
+          orderId
+        })
+        if (itemResponse.success && itemResponse.itemId) {
+          createdItems.push({
+            ...item,
+            id: itemResponse.itemId,
+            orderId,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString()
+          } as OrderItem)
+        }
+      }
+
+      if (order.status === 'Delivered' && createdItems.length > 0) {
+        const stockStore = useStockStore.getState()
+        const { updateStock, addStock, fetchStocks } = stockStore
+
+        await fetchStocks()
+        const freshStocks = useStockStore.getState().stocks
+
+        for (const item of createdItems) {
+          if (item.stockId) {
+            const stock = freshStocks.find((s) => s.id === item.stockId)
+            if (stock) {
+              const newQuantity = (stock.quantity || 0) + item.quantity
+              await updateStock({
+                ...stock,
+                quantity: newQuantity,
+                costPrice: item.unitPrice,
+                status:
+                  newQuantity <= 0
+                    ? 'Out of Stock'
+                    : newQuantity <= stock.reorderPoint
+                      ? 'Critical Low'
+                      : 'In Stock'
+              } as Stock)
+            }
+          } else {
+            const now = new Date().toISOString()
+            const newStock: Stock = {
+              id: generatePrefixedUUID('stk'),
+              name: item.name,
+              description: item.description || '',
+              category: item.category || 'Uncategorized',
+              quantity: item.quantity,
+              unit: item.unit,
+              unitPrice: item.unitPrice,
+              costPrice: item.unitPrice,
+              supplierId: order.supplierId,
+              location: '',
+              sku: item.sku,
+              status: item.quantity <= 0 ? 'Out of Stock' : 'In Stock',
+              reorderPoint: Math.ceil(item.quantity * 0.2),
+              createdAt: now,
+              updatedAt: now
+            }
+            await addStock(newStock)
+          }
+        }
+      }
+
+      const supplierResponse = await window.context.suppliers.getById(order.supplierId)
+      const supplierName = supplierResponse.success
+        ? supplierResponse.supplier?.name
+        : 'Unknown Supplier'
+
+      const newOrder = {
+        ...order,
+        id: orderId,
+        supplierName: supplierName,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      } as SupplyOrder
+
+      set((state) => ({
+        orders: [newOrder, ...state.orders],
+        orderItems: createdItems
+      }))
+
+      const currentUser = useAuthStore.getState().user
+      if (currentUser) {
+        let logDetails = `Created new supply order: from ${supplierName}`
+        if (order.status === 'Delivered') {
+          logDetails += ` - Stock quantities have been updated`
+        }
+
+        const logEntry = {
+          id: generatePrefixedUUID('log'),
+          userId: currentUser.id,
+          username: currentUser.username,
+          action: 'create',
+          entityType: 'supplyOrder',
+          entityId: orderId,
+          details: logDetails,
+          timestamp: new Date().toISOString()
+        }
+        useLogStore.getState().createLog(logEntry)
+      }
+
+      return { orderId }
+    } catch (error) {
+      console.error('Failed to create order with items:', error)
+      set({ error: 'Failed to create order with items' })
+      return { orderId: null, error: 'Failed to create order with items' }
+    } finally {
+      set({ loading: false })
+    }
+  },
+
   createOrderItem: async (item) => {
     set({ loading: true, error: null })
     try {
@@ -215,9 +343,11 @@ export const useSupplyOrderStore = create<SupplyOrderState>((set, get) => ({
                 const stockToUpdate = stocks.find((stock) => stock.id === item.stockId)
                 if (stockToUpdate) {
                   // Update stock quantity by adding the ordered quantity
+                  // Also update costPrice if it has changed (supplier price increase/decrease)
                   const updatedStock = {
                     ...stockToUpdate,
                     quantity: stockToUpdate.quantity + item.quantity,
+                    costPrice: item.unitPrice, // Update cost price from the supply order
                     // Update status based on new quantity
                     status:
                       stockToUpdate.quantity + item.quantity <= 0

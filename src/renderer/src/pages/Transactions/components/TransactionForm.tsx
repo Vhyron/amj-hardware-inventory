@@ -843,7 +843,7 @@ export default function TransactionForm({ open, onClose, mode, selected }: Trans
                   .filter((stock) => stock.quantity > 0)
                   .map((stock) => (
                     <Option key={stock.id} value={stock.id}>
-                      {stock.name} - {stock.sku} ({stock.quantity} {stock.unit} available)
+                      {`${stock.name} - ${stock.sku} (${stock.quantity} ${stock.unit} available)`}
                     </Option>
                   ))}
               </Select>

@@ -1,30 +1,30 @@
-import {
-  Form,
-  Modal,
-  Input,
-  Select,
-  Button,
-  Space,
-  Table,
-  Typography,
-  Row,
-  Col,
-  InputNumber,
-  Divider,
-  notification,
-  Alert
-} from 'antd'
-import { useState, useEffect } from 'react'
 import { FormMode } from '@/renderer/src/lib/types'
-import { useSupplyOrderStore } from '@/renderer/src/store/supplyOrderStore'
-import { useSupplierStore } from '@/renderer/src/store/supplierStore'
-import { useAuthStore } from '@/renderer/src/store/authStore'
-import { useStockStore } from '@/renderer/src/store/stockStore'
-import { useCategoryStore } from '@/renderer/src/store/categoryStore'
-import { SupplyOrder, OrderItem, OrderItemFormData } from '../types'
-import { EditOutlined, DeleteOutlined, PlusOutlined } from '@ant-design/icons'
 import { formatCurrency } from '@/renderer/src/lib/utils'
 import { units } from '@/renderer/src/pages/Stocks/types'
+import { useAuthStore } from '@/renderer/src/store/authStore'
+import { useCategoryStore } from '@/renderer/src/store/categoryStore'
+import { useStockStore } from '@/renderer/src/store/stockStore'
+import { useSupplierStore } from '@/renderer/src/store/supplierStore'
+import { useSupplyOrderStore } from '@/renderer/src/store/supplyOrderStore'
+import { DeleteOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons'
+import {
+  Alert,
+  Button,
+  Col,
+  Divider,
+  Form,
+  Input,
+  InputNumber,
+  Modal,
+  notification,
+  Row,
+  Select,
+  Space,
+  Table,
+  Typography
+} from 'antd'
+import { useEffect, useState } from 'react'
+import { OrderItem, OrderItemFormData, SupplyOrder } from '../types'
 
 const { TextArea } = Input
 const { Title } = Typography
@@ -455,10 +455,19 @@ export default function SupplyOrderForm({ open, onClose, mode, selected }: Suppl
               label="Supplier"
               rules={[{ required: true, message: 'Please select a supplier' }]}
             >
-              <Select placeholder="Select supplier" onChange={handleSupplierChange}>
+              <Select
+                placeholder="Select supplier"
+                onChange={handleSupplierChange}
+                showSearch
+                filterOption={(input, option) =>
+                  (option?.children as unknown as string)
+                    ?.toLowerCase()
+                    .includes(input.toLowerCase())
+                }
+              >
                 {activeSuppliers.map((supplier) => (
                   <Option key={supplier.id} value={supplier.id}>
-                    {supplier.name}
+                    {`${supplier.name}`}
                   </Option>
                 ))}
               </Select>
@@ -571,10 +580,16 @@ export default function SupplyOrderForm({ open, onClose, mode, selected }: Suppl
                   allowClear
                   placeholder="Select from existing stock"
                   onChange={handleStockChange}
+                  showSearch
+                  filterOption={(input, option) =>
+                    (option?.children as unknown as string)
+                      ?.toLowerCase()
+                      .includes(input.toLowerCase())
+                  }
                 >
                   {supplierStocks.map((stock) => (
                     <Option key={stock.id} value={stock.id}>
-                      {stock.name} - {stock.sku}
+                      {`${stock.name} - ${stock.sku}`}
                     </Option>
                   ))}
                 </Select>
@@ -598,10 +613,18 @@ export default function SupplyOrderForm({ open, onClose, mode, selected }: Suppl
                   label="Category"
                   rules={[{ required: true, message: 'Please select a category' }]}
                 >
-                  <Select placeholder="Select category">
+                  <Select
+                    placeholder="Select category"
+                    showSearch
+                    filterOption={(input, option) =>
+                      (option?.children as unknown as string)
+                        ?.toLowerCase()
+                        .includes(input.toLowerCase())
+                    }
+                  >
                     {categories.map((category) => (
                       <Option key={category.id} value={category.name}>
-                        {category.name}
+                        {`${category.name}`}
                       </Option>
                     ))}
                   </Select>
@@ -652,10 +675,18 @@ export default function SupplyOrderForm({ open, onClose, mode, selected }: Suppl
                   label="Unit"
                   rules={[{ required: true, message: 'Please select a unit' }]}
                 >
-                  <Select placeholder="Select unit">
+                  <Select
+                    placeholder="Select unit"
+                    showSearch
+                    filterOption={(input, option) =>
+                      (option?.children as unknown as string)
+                        ?.toLowerCase()
+                        .includes(input.toLowerCase())
+                    }
+                  >
                     {units.map((unit) => (
                       <Option key={unit} value={unit}>
-                        {unit}
+                        {`${unit}`}
                       </Option>
                     ))}
                   </Select>

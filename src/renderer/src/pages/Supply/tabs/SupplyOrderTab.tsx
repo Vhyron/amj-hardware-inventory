@@ -1,14 +1,13 @@
 import SearchInput from '@/renderer/src/components/SearchInput'
 import TableComponent, { generateColumns, TableActionOption } from '@/renderer/src/components/Table'
 import { FormMode } from '@/renderer/src/lib/types'
+import { formatCurrency, hasPermission } from '@/renderer/src/lib/utils'
+import { useAuthStore } from '@/renderer/src/store/authStore'
+import { useSupplyOrderStore } from '@/renderer/src/store/supplyOrderStore'
+import { DeleteOutlined, EditOutlined } from '@ant-design/icons'
 import { Flex, Tag } from 'antd'
 import { useEffect, useMemo, useState } from 'react'
-import { EditOutlined, DeleteOutlined } from '@ant-design/icons'
-import { useSupplyOrderStore } from '@/renderer/src/store/supplyOrderStore'
 import { SupplyOrder } from '../types'
-import { formatCurrency } from '@/renderer/src/lib/utils'
-import { useAuthStore } from '@/renderer/src/store/authStore'
-import { hasPermission } from '@/renderer/src/lib/utils'
 
 interface Props {
   onAction: (order: SupplyOrder | null, mode: FormMode) => void
@@ -24,7 +23,7 @@ export default function SupplyOrderTab({ onAction }: Props) {
     pageSize: 10,
     showSizeChanger: false,
     onChange: (page: number, pageSize: number) => {
-      setPagination(prev => ({
+      setPagination((prev) => ({
         ...prev,
         current: page,
         pageSize: pageSize
@@ -52,17 +51,23 @@ export default function SupplyOrderTab({ onAction }: Props) {
   const handleAction = (record: SupplyOrder, actionType: string | number) => {
     if (typeof actionType === 'string') {
       if (actionType === 'edit' && !hasPermission(user?.permissions, 'supplyOrders:edit')) return
-      if (actionType === 'delete' && !hasPermission(user?.permissions, 'supplyOrders:delete')) return
+      if (actionType === 'delete' && !hasPermission(user?.permissions, 'supplyOrders:delete'))
+        return
 
       onAction(record, actionType as FormMode)
     }
   }
 
   // Define action options
-  const getOptions = () => {
+  const getOptions = (record: SupplyOrder) => {
     const options: TableActionOption[] = []
 
-    if (hasPermission(user?.permissions, 'supplyOrders:edit')) {
+    // Only allow editing if status is not Delivered or Cancelled
+    if (
+      hasPermission(user?.permissions, 'supplyOrders:edit') &&
+      record.status !== 'Delivered' &&
+      record.status !== 'Cancelled'
+    ) {
       options.push({
         label: 'Edit',
         key: 'edit',
@@ -86,7 +91,7 @@ export default function SupplyOrderTab({ onAction }: Props) {
     const baseColumns = generateColumns<SupplyOrder>(
       filteredOrders,
       handleAction,
-      getOptions(),
+      getOptions,
       ['id', 'supplierName', 'createdAt', 'status', 'totalCost'],
       'id'
     )
@@ -105,7 +110,9 @@ export default function SupplyOrderTab({ onAction }: Props) {
           style={{
             cursor: hasPermission(user?.permissions, 'supplyOrders:view') ? 'pointer' : 'default',
             color: hasPermission(user?.permissions, 'supplyOrders:view') ? undefined : 'inherit',
-            textDecoration: hasPermission(user?.permissions, 'supplyOrders:view') ? undefined : 'none'
+            textDecoration: hasPermission(user?.permissions, 'supplyOrders:view')
+              ? undefined
+              : 'none'
           }}
         >
           {text}
@@ -123,10 +130,10 @@ export default function SupplyOrderTab({ onAction }: Props) {
     const statusColumnIndex = baseColumns.findIndex((col) => col.key === 'status')
     if (statusColumnIndex !== -1) {
       baseColumns[statusColumnIndex].render = (status: string) => {
-        let color = 'blue'
+        let color = 'orange'
         if (status === 'Delivered') color = 'green'
         if (status === 'Cancelled') color = 'red'
-        if (status === 'Approved') color = 'orange'
+        if (status === 'Approved') color = 'blue'
 
         return <Tag color={color}>{status}</Tag>
       }

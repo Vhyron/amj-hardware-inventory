@@ -241,6 +241,43 @@ export const useTransactionStore = create<TransactionStore>()(
       try {
         const currentTransaction = get().currentTransaction
 
+        // **FIX: Check if item already exists in the transaction**
+        const existingItems = get().currentItems
+        const existingItem = existingItems.find(
+          (i) => i.transactionId === item.transactionId && i.stockId === item.stockId
+        )
+
+        if (existingItem) {
+          // **Update existing item instead of creating new one**
+          const updatedQuantity = existingItem.quantity + item.quantity
+
+          // Check stock availability for completed transactions
+          if (currentTransaction?.status === 'completed') {
+            const { stocks } = useStockStore.getState()
+            const stock = stocks.find((s) => s.id === item.stockId)
+            const quantityIncrease = item.quantity
+
+            if (stock && stock.quantity < quantityIncrease) {
+              set({
+                error: `Insufficient stock for ${stock.name}: need ${quantityIncrease} more, only ${stock.quantity} available`
+              })
+              return null
+            }
+          }
+
+          const success = await get().updateTransactionItem(existingItem.id, {
+            quantity: updatedQuantity,
+            unitPrice: item.unitPrice // Update price if changed
+          })
+
+          if (success) {
+            return existingItem.id
+          } else {
+            return null
+          }
+        }
+
+        // **If item doesn't exist, create new one**
         if (currentTransaction?.status === 'completed') {
           const { stocks } = useStockStore.getState()
           const stock = stocks.find((s) => s.id === item.stockId)
@@ -295,7 +332,6 @@ export const useTransactionStore = create<TransactionStore>()(
             useLogStore.getState().createLog(logEntry)
           }
 
-          const currentTransaction = get().currentTransaction
           if (currentTransaction?.status === 'completed') {
             const { stocks, updateStock, fetchStocks } = useStockStore.getState()
             const stockToUpdate = stocks.find((s) => s.id === item.stockId)
@@ -349,23 +385,17 @@ export const useTransactionStore = create<TransactionStore>()(
 
         let multiplier = 0
 
-       
         if (oldStatus === 'pending' && newStatus === 'completed') {
           multiplier = -1
-        }
-        else if (oldStatus === 'pending' && newStatus === 'cancelled') {
+        } else if (oldStatus === 'pending' && newStatus === 'cancelled') {
           multiplier = 0
-        }
-        else if (oldStatus === 'completed' && newStatus === 'cancelled') {
+        } else if (oldStatus === 'completed' && newStatus === 'cancelled') {
           multiplier = 1
-        }
-        else if (oldStatus === 'completed' && newStatus === 'pending') {
+        } else if (oldStatus === 'completed' && newStatus === 'pending') {
           multiplier = 1
-        }
-        else if (oldStatus === 'cancelled' && newStatus === 'pending') {
+        } else if (oldStatus === 'cancelled' && newStatus === 'pending') {
           multiplier = 0
-        }
-        else if (oldStatus === 'cancelled' && newStatus === 'completed') {
+        } else if (oldStatus === 'cancelled' && newStatus === 'completed') {
           multiplier = -1
         }
 

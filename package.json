@@ -1,5 +1,6 @@
 {
-  "name": "fagan-inventory",
+  "name": "amj-hardware",
+  "productName": "AMJ Hardware",
   "version": "1.0.0",
   "description": "An Electron application with React and TypeScript",
   "main": "./out/main/index.js",
@@ -68,5 +69,21 @@
       "electron",
       "esbuild"
     ]
+  },
+  "build": {
+    "appId": "com.amj.hardware",
+    "productName": "AMJ Hardware",
+    "mac": {
+      "icon": "build/icon.icns",
+      "category": "public.app-category.business"
+    },
+    "win": {
+      "icon": "build/icon.ico",
+      "target": ["nsis"]
+    },
+    "linux": {
+      "icon": "build/icon.png",
+      "target": ["AppImage", "deb"]
+    }
   }
 }

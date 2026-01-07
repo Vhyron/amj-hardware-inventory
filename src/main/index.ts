@@ -11,6 +11,9 @@ import { setupSupplyOrdersIPC } from './lib/service/supplyOrders/supplyOrders-ip
 import { setupTransactionsIPC } from './lib/service/transactions/transactions-ipc'
 import { setupActivityLogsIPC } from './lib/service/activityLogs/activity-ipc'
 
+// App Name
+app.name = 'AMJ Hardware'
+
 function createWindow(): void {
   // Create the browser window.
   const mainWindow = new BrowserWindow({
@@ -20,7 +23,7 @@ function createWindow(): void {
     autoHideMenuBar: true,
     ...(process.platform === 'linux' ? { icon } : {}),
     center: true,
-    title: 'Fagan',
+    title: 'AMJ Hardware',
     vibrancy: 'under-window',
     visualEffectState: 'active',
     titleBarStyle: 'default',
@@ -56,7 +59,7 @@ function createWindow(): void {
 // Some APIs can only be used after this event occurs.
 app.whenReady().then(() => {
   try {
-    const dbManager = DatabaseManager.getInstance()
+    // const dbManager = DatabaseManager.getInstance()
     console.log('✅ Database initialized successfully.')
     console.log('📂 Database path:', app.getPath('userData'))
   } catch (error) {
@@ -64,8 +67,17 @@ app.whenReady().then(() => {
   }
 
   // Set app user model id for windows
-  electronApp.setAppUserModelId('com.electron')
+  electronApp.setAppUserModelId('com.amj.hardware')
 
+  // Set dock icon for macOS
+  if (process.platform === 'darwin' && app.dock) {
+    try {
+      const dockIconPath = join(__dirname, '../../build/icon.png')
+      app.dock.setIcon(dockIconPath)
+    } catch (error) {
+      console.error('Failed to set dock icon:', error)
+    }
+  }
   // Default open or close DevTools by F12 in development
   // and ignore CommandOrControl + R in production.
   // see https://github.com/alex8088/electron-toolkit/tree/master/packages/utils

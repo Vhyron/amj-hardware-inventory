@@ -4,7 +4,7 @@
   "version": "1.0.0",
   "description": "An Electron application with React and TypeScript",
   "main": "./out/main/index.js",
-  "author": "example.com",
+  "author": "cognito",
   "homepage": "https://electron-vite.org",
   "scripts": {
     "format": "prettier --write .",
@@ -73,17 +73,64 @@
   "build": {
     "appId": "com.amj.hardware",
     "productName": "AMJ Hardware",
+    "copyright": "Copyright © 2026 AMJ Hardware",
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "files": [
+      "out/**/*",
+      "!**/*.map"
+    ],
     "mac": {
       "icon": "build/icon.icns",
-      "category": "public.app-category.business"
+      "category": "public.app-category.business",
+      "target": ["dmg", "zip"],
+      "darkModeSupport": true,
+      "extendInfo": {
+        "CFBundleName": "AMJ Hardware",
+        "CFBundleDisplayName": "AMJ Hardware",
+        "LSApplicationCategoryType": "public.app-category.business"
+      }
     },
     "win": {
       "icon": "build/icon.ico",
-      "target": ["nsis"]
+      "target": [
+        {
+          "target": "nsis",
+          "arch": ["x64", "ia32"]
+        },
+        {
+          "target": "portable",
+          "arch": ["x64"]
+        }
+      ],
+      "publisherName": "Cognito",
+      "verifyUpdateCodeSignature": false
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "AMJ Hardware",
+      "installerIcon": "build/icon.ico",
+      "uninstallerIcon": "build/icon.ico",
+      "installerHeader": "build/icon.ico",
+      "deleteAppDataOnUninstall": false
+    },
+    "portable": {
+      "artifactName": "AMJ-Hardware-Portable-${version}.exe"
     },
     "linux": {
       "icon": "build/icon.png",
-      "target": ["AppImage", "deb"]
+      "category": "Office",
+      "target": ["AppImage", "deb", "rpm"],
+      "desktop": {
+        "Name": "AMJ Hardware",
+        "GenericName": "Inventory Management",
+        "Comment": "Hardware Iventory Management System"
+      }
     }
   }
 }

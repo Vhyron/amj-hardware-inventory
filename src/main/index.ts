@@ -1,7 +1,6 @@
 import { app, shell, BrowserWindow } from 'electron'
 import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
-import icon from '../../resources/icon.png?asset'
 import DatabaseManager from './lib/database/database'
 import { setupAuthIPC } from './lib/service/auth/auth-ipc'
 import { setupStocksIPC } from './lib/service/stocks/stocks-ipc'
@@ -14,6 +13,16 @@ import { setupActivityLogsIPC } from './lib/service/activityLogs/activity-ipc'
 // App Name
 app.name = 'AMJ Hardware'
 
+const getIconPath = () => {
+  if (process.platform === 'darwin') {
+    return join(__dirname, '../../build/icon.icns')
+  } else if (process.platform === 'win32') {
+    return join(__dirname, '../../build/icon.ico')
+  } else {
+    return join(__dirname, '../../build/icon.png')
+  }
+}
+
 function createWindow(): void {
   // Create the browser window.
   const mainWindow = new BrowserWindow({
@@ -21,7 +30,7 @@ function createWindow(): void {
     height: 900,
     show: false,
     autoHideMenuBar: true,
-    ...(process.platform === 'linux' ? { icon } : {}),
+    icon: getIconPath(),
     center: true,
     title: 'AMJ Hardware',
     vibrancy: 'under-window',

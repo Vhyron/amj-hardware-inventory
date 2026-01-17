@@ -1,5 +1,5 @@
-appId: com.electron.app
-productName: fagan-inventory
+appId: com.amj.hardware
+productName: AMJ Hardware
 directories:
   buildResources: build
 files:
@@ -12,7 +12,7 @@ files:
 asarUnpack:
   - resources/**
 win:
-  executableName: fagan-inventory
+  executableName: amj-hardware
 nsis:
   artifactName: ${name}-${version}-setup.${ext}
   shortcutName: ${productName}

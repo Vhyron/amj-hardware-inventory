@@ -248,8 +248,34 @@ export default function SupplyOrderForm({ open, onClose, mode, selected }: Suppl
       setTempItems(tempItems.map((i) => (i.id === editingItemId ? item : i)))
       notification.success({ message: 'Item updated' })
     } else {
-      setTempItems([...tempItems, item])
-      notification.success({ message: 'Item added' })
+      // **FIX: Check for duplicate items by stockId**
+      const existingItemIndex = tempItems.findIndex(
+        (i) => i.stockId && values.stockId && i.stockId === values.stockId
+      )
+
+      if (existingItemIndex !== -1) {
+        // **Merge with existing item**
+        const existingItem = tempItems[existingItemIndex]
+        const updatedItem: OrderItem = {
+          ...existingItem,
+          quantity: existingItem.quantity + values.quantity,
+          unitPrice: values.unitPrice, // Use latest price
+          updatedAt: new Date().toISOString()
+        }
+
+        const newTempItems = [...tempItems]
+        newTempItems[existingItemIndex] = updatedItem
+
+        setTempItems(newTempItems)
+        notification.success({
+          message: 'Item quantity updated',
+          description: `${existingItem.name}: ${existingItem.quantity} + ${values.quantity} = ${updatedItem.quantity} ${values.unit}`
+        })
+      } else {
+        // **Add as new item**
+        setTempItems([...tempItems, item])
+        notification.success({ message: 'Item added' })
+      }
     }
   }
 

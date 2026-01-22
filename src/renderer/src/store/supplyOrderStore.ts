@@ -246,17 +246,11 @@ export const useSupplyOrderStore = create<SupplyOrderState>((set, get) => ({
       } as SupplyOrder
 
       set((state) => ({
-        orders: [newOrder, ...state.orders],
-        orderItems: createdItems
+        orders: [newOrder, ...state.orders]
       }))
 
       const currentUser = useAuthStore.getState().user
       if (currentUser) {
-        let logDetails = `Created new supply order: from ${supplierName}`
-        if (order.status === 'Delivered') {
-          logDetails += ` - Stock quantities have been updated`
-        }
-
         const logEntry = {
           id: generatePrefixedUUID('log'),
           userId: currentUser.id,
@@ -264,7 +258,7 @@ export const useSupplyOrderStore = create<SupplyOrderState>((set, get) => ({
           action: 'create',
           entityType: 'supplyOrder',
           entityId: orderId,
-          details: logDetails,
+          details: `Created supply order with ${items.length} items from ${supplierName}`,
           timestamp: new Date().toISOString()
         }
         useLogStore.getState().createLog(logEntry)
@@ -286,31 +280,39 @@ export const useSupplyOrderStore = create<SupplyOrderState>((set, get) => ({
       // **FIX: Check if item already exists in the order**
       const existingItems = get().orderItems
       const existingItem = existingItems.find(
-        (i) => i.orderId === item.orderId && i.stockId === item.stockId
+        (existing) => existing.orderId === item.orderId && existing.stockId === item.stockId
       )
 
       if (existingItem) {
-        // **Update existing item instead of creating new one**
+        // **Update existing item instead of creating a new one**
         const updatedQuantity = existingItem.quantity + item.quantity
-        const updatedItem = {
-          ...existingItem,
+        const updateSuccess = await get().updateOrderItem(existingItem.id, {
           quantity: updatedQuantity,
-          unitPrice: item.unitPrice // Update price if changed
-        }
-
-        const success = await get().updateOrderItem(existingItem.id, {
-          quantity: updatedQuantity,
-          unitPrice: item.unitPrice
+          unitPrice: item.unitPrice // Update price if provided
         })
 
-        if (success) {
+        if (updateSuccess) {
+          const currentUser = useAuthStore.getState().user
+          if (currentUser) {
+            const logEntry = {
+              id: generatePrefixedUUID('log'),
+              userId: currentUser.id,
+              username: currentUser.username,
+              action: 'update',
+              entityType: 'orderItem',
+              entityId: existingItem.id,
+              details: `Updated existing order item: ${item.name} (${existingItem.quantity} + ${item.quantity} = ${updatedQuantity} ${item.unit})`,
+              timestamp: new Date().toISOString()
+            }
+            useLogStore.getState().createLog(logEntry)
+          }
           return existingItem.id
         } else {
           return null
         }
       }
 
-      // **If item doesn't exist, create new one**
+      // **Item doesn't exist, create new one**
       const response = await window.context.supplyOrders.addItem(item)
       if (response.success && response.itemId) {
         const newItem = {
@@ -325,8 +327,23 @@ export const useSupplyOrderStore = create<SupplyOrderState>((set, get) => ({
         }))
 
         if (get().currentOrder) {
-          const updatedTotalCost = get().currentOrder!.totalCost + item.quantity * item.unitPrice
-          get().updateOrder(get().currentOrder!.id, { totalCost: updatedTotalCost })
+          const totalCost = get().currentOrder!.totalCost + item.quantity * item.unitPrice
+          get().updateOrder(get().currentOrder!.id, { totalCost })
+        }
+
+        const currentUser = useAuthStore.getState().user
+        if (currentUser) {
+          const logEntry = {
+            id: generatePrefixedUUID('log'),
+            userId: currentUser.id,
+            username: currentUser.username,
+            action: 'create',
+            entityType: 'orderItem',
+            entityId: response.itemId,
+            details: `Added new item to order: ${item.name} (${item.quantity} ${item.unit} @ ₱${item.unitPrice.toFixed(2)})`,
+            timestamp: new Date().toISOString()
+          }
+          useLogStore.getState().createLog(logEntry)
         }
 
         return response.itemId
@@ -346,13 +363,17 @@ export const useSupplyOrderStore = create<SupplyOrderState>((set, get) => ({
   updateOrder: async (id, data) => {
     set({ loading: true, error: null })
     try {
-      if (data.status === 'Delivered') {
-        const orderItems = get().orderItems
-        const currentOrder = get().currentOrder
+      const currentOrder = get().currentOrder
+      const oldStatus = currentOrder?.status
 
+      if (data.status === 'Delivered' && oldStatus !== 'Delivered') {
+        const orderItems = get().orderItems
         if (orderItems.length > 0) {
           const stockStore = useStockStore.getState()
-          const { stocks, updateStock, addStock } = stockStore
+          const { updateStock, addStock, fetchStocks } = stockStore
+
+          await fetchStocks()
+          const stocks = useStockStore.getState().stocks
 
           for (const item of orderItems) {
             if (item.stockId) {
@@ -458,6 +479,9 @@ export const useSupplyOrderStore = create<SupplyOrderState>((set, get) => ({
   updateOrderItem: async (id, data) => {
     set({ loading: true, error: null })
     try {
+      const currentOrder = get().currentOrder
+      const oldItem = get().orderItems.find((item) => item.id === id)
+
       const response = await window.context.supplyOrders.updateItem(id, data)
       if (response.success) {
         set((state) => ({
@@ -472,6 +496,33 @@ export const useSupplyOrderStore = create<SupplyOrderState>((set, get) => ({
           )
           const totalCost = items.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0)
           get().updateOrder(get().currentOrder!.id, { totalCost })
+        }
+
+        // **ADDED: Activity logging for order item updates**
+        const currentUser = useAuthStore.getState().user
+        if (currentUser && oldItem) {
+          const itemName = oldItem.name || 'Unknown'
+          let details = `Updated item in order ${currentOrder?.id} | Product: ${itemName}`
+
+          if (data.quantity !== undefined && oldItem.quantity !== data.quantity) {
+            details += ` | Qty: ${oldItem.quantity} → ${data.quantity} ${oldItem.unit}`
+          }
+
+          if (data.unitPrice !== undefined && oldItem.unitPrice !== data.unitPrice) {
+            details += ` | Price: ₱${oldItem.unitPrice.toFixed(2)} → ₱${data.unitPrice.toFixed(2)}`
+          }
+
+          const logEntry = {
+            id: generatePrefixedUUID('log'),
+            userId: currentUser.id,
+            username: currentUser.username,
+            action: 'update',
+            entityType: 'orderItem',
+            entityId: id,
+            details: details,
+            timestamp: new Date().toISOString()
+          }
+          useLogStore.getState().createLog(logEntry)
         }
 
         return true

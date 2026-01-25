@@ -1,9 +1,9 @@
-import { Card, Input, Button, Form, Alert } from 'antd'
+import logo from '@/renderer/src/assets/amj-logo.png'
+import { Alert, Button, Card, Form, Input } from 'antd'
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useLoadingStore } from '../store/loadingStore'
 import { useAuthStore } from '../store/authStore'
-import logo from '@/renderer/src/assets/amj-logo.png'
+import { useLoadingStore } from '../store/loadingStore'
 
 export default function Login() {
   const [form] = Form.useForm()
@@ -60,7 +60,14 @@ export default function Login() {
         alignItems: 'center'
       }}
     >
-      <Card style={{ width: 400, boxShadow: '0 4px 12px rgba(0,0,0,0.15)', borderRadius: 12, position: 'relative' }}>
+      <Card
+        style={{
+          width: 400,
+          boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+          borderRadius: 12,
+          position: 'relative'
+        }}
+      >
         <div style={{ textAlign: 'center', marginBottom: 8 }}>
           <img
             src={logo}
@@ -109,8 +116,18 @@ export default function Login() {
             </Button>
           </Form.Item>
         </Form>
-        <p style={{ position: 'absolute', bottom: -50, left: '50%', transform: 'translateX(-50%)', fontSize: 13, color: '404040', whiteSpace: 'nowrap' }}>
-          © 2025 Team Cognito. All rights reserved.
+        <p
+          style={{
+            position: 'absolute',
+            bottom: -50,
+            left: '50%',
+            transform: 'translateX(-50%)',
+            fontSize: 13,
+            color: '404040',
+            whiteSpace: 'nowrap'
+          }}
+        >
+          © {new Date().getFullYear()} Team Cognito. All rights reserved.
         </p>
       </Card>
     </div>

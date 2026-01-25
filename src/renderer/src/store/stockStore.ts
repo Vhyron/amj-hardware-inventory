@@ -16,6 +16,8 @@ interface StockState {
   stocks: Stock[]
   archivedStocks: Stock[]
   loading: boolean
+  activeLoading: boolean
+  archivedLoading: boolean
   error: string | null | any
 
   // Basic state setters
@@ -38,6 +40,8 @@ export const useStockStore = create<StockState>((set, get) => ({
   stocks: [],
   archivedStocks: [],
   loading: false,
+  activeLoading: false,
+  archivedLoading: false,
   error: null,
 
   // Basic state setters
@@ -51,7 +55,7 @@ export const useStockStore = create<StockState>((set, get) => ({
   },
 
   fetchActiveStocks: async () => {
-    set({ loading: true, error: null })
+    set({ activeLoading: true, error: null })
 
     try {
       const response = await (window.context.stocks.getActive
@@ -66,16 +70,17 @@ export const useStockStore = create<StockState>((set, get) => ({
     } catch (error: any) {
       set({ error: error.message || 'Something went wrong, Failed to fetch stocks' })
     } finally {
-      set({ loading: false })
+      set({ activeLoading: false })
     }
   },
 
   fetchArchivedStocks: async () => {
-    set({ loading: true, error: null })
+    set({ archivedLoading: true, error: null })
 
     try {
       if (!window.context.stocks.getArchived) {
         set({ archivedStocks: [] })
+        set({ archivedLoading: false })
         return
       }
 
@@ -89,7 +94,7 @@ export const useStockStore = create<StockState>((set, get) => ({
     } catch (error: any) {
       set({ error: error.message || 'Something went wrong, Failed to fetch archived stocks' })
     } finally {
-      set({ loading: false })
+      set({ archivedLoading: false })
     }
   },
 

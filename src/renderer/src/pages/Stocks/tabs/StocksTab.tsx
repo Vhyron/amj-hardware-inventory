@@ -20,7 +20,7 @@ interface StocksTabProps {
  */
 export default function StocksTab({ onStockAction }: StocksTabProps) {
   const { user } = useAuthStore()
-  const { stocks, loading, fetchActiveStocks, archiveStock } = useStockStore()
+  const { stocks, loading, activeLoading, fetchActiveStocks, archiveStock } = useStockStore()
   const { fetchSuppliers } = useSupplierStore()
   const { modal } = AntdApp.useApp()
   const [searchTerm, setSearchTerm] = useState('')
@@ -206,7 +206,7 @@ export default function StocksTab({ onStockAction }: StocksTabProps) {
         columns={columns()}
         size="small"
         bordered={true}
-        loading={loading}
+        loading={loading || activeLoading}
         pagination={pagination}
       />
     </div>

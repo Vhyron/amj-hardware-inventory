@@ -8,14 +8,15 @@ import { Stock } from '../types'
 import { useStockStore, determineStatus } from '@/renderer/src/store/stockStore'
 import { useAuthStore } from '@/renderer/src/store/authStore'
 import { hasPermission } from '@/renderer/src/lib/utils'
+import { FormMode } from '@/renderer/src/lib/types'
 
 interface ArchivedTabProps {
-  onStockAction: (stock: Stock | null, mode: string) => void
+  onStockAction: (stock: Stock | null, mode: FormMode) => void
 }
 
-export default function ArchivedTab(_: ArchivedTabProps) {
+export default function ArchivedTab({ onStockAction }: ArchivedTabProps) {
   const { user } = useAuthStore()
-  const { archivedStocks, loading, fetchArchivedStocks, restoreStock } = useStockStore()
+  const { archivedStocks, loading, archivedLoading, fetchArchivedStocks, restoreStock } = useStockStore()
   const { modal } = AntdApp.useApp()
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedCategory, setSelectedCategory] = useState<string>('All Categories')
@@ -94,9 +95,18 @@ export default function ArchivedTab(_: ArchivedTabProps) {
   }
 
   const handleStockAction = (record: Stock, actionType: string | number) => {
-    if (typeof actionType === 'string' && actionType === 'restore') {
-      if (!hasPermission(user?.permissions, 'stocks:archive')) return
-      handleRestore(record)
+    if (typeof actionType === 'string') {
+      if (actionType === 'restore') {
+        if (!hasPermission(user?.permissions, 'stocks:archive')) return
+        handleRestore(record)
+        return
+      }
+
+      if (actionType === 'view') {
+        if (!hasPermission(user?.permissions, 'stocks:view')) return
+        onStockAction(record, 'view')
+        return
+      }
     }
   }
 
@@ -108,6 +118,26 @@ export default function ArchivedTab(_: ArchivedTabProps) {
       ['sku', 'name', 'category', 'quantity', 'unit', 'reorderPoint', 'status', 'updatedAt'],
       'name'
     )
+
+    const nameColumnIndex = baseColumns.findIndex((col) => col.key === 'name')
+    if (nameColumnIndex !== -1) {
+      baseColumns[nameColumnIndex].render = (text: string, record: Stock) => (
+        <a
+          onClick={() => {
+            if (hasPermission(user?.permissions, 'stocks:view')) {
+              onStockAction(record, 'view')
+            }
+          }}
+          style={{
+            cursor: hasPermission(user?.permissions, 'stocks:view') ? 'pointer' : 'default',
+            color: hasPermission(user?.permissions, 'stocks:view') ? undefined : 'inherit',
+            textDecoration: hasPermission(user?.permissions, 'stocks:view') ? undefined : 'none'
+          }}
+        >
+          {text}
+        </a>
+      )
+    }
 
     const statusColumnIndex = baseColumns.findIndex((col) => col.key === 'status')
     if (statusColumnIndex !== -1) {
@@ -135,7 +165,7 @@ export default function ArchivedTab(_: ArchivedTabProps) {
         columns={columns()}
         size="small"
         bordered={true}
-        loading={loading}
+        loading={loading || archivedLoading}
         pagination={pagination}
       />
     </div>

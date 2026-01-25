@@ -62,7 +62,7 @@ export default function TransactionForm({ open, onClose, mode, selected }: Trans
   >([])
 
   const [localItems, setLocalItems] = useState<LocalItem[]>([])
-  const { stocks, fetchStocks } = useStockStore()
+  const { stocks, fetchActiveStocks } = useStockStore()
   const {
     createTransaction,
     updateTransaction,
@@ -82,8 +82,8 @@ export default function TransactionForm({ open, onClose, mode, selected }: Trans
   const isAddMode = mode === 'add'
 
   useEffect(() => {
-    fetchStocks()
-  }, [fetchStocks])
+    fetchActiveStocks()
+  }, [fetchActiveStocks])
 
   useEffect(() => {
     if (open && selected) {
@@ -840,7 +840,7 @@ export default function TransactionForm({ open, onClose, mode, selected }: Trans
                 }
               >
                 {stocks
-                  .filter((stock) => stock.quantity > 0)
+                  .filter((stock) => stock.quantity > 0 && stock.status !== 'Archived')
                   .map((stock) => (
                     <Option key={stock.id} value={stock.id}>
                       {`${stock.name} - ${stock.sku} (${stock.quantity} ${stock.unit} available)`}

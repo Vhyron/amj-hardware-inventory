@@ -40,6 +40,7 @@ export const usersSeeds = [
     permissions: JSON.stringify([
       'stocks:view', 
       'stocks:edit', 
+      'stocks:archive',
       'categories:view', 
       'users:view'
     ])

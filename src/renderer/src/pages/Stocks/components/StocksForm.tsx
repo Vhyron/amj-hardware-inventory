@@ -124,7 +124,7 @@ export default function StocksForm({ stock, open, mode, onClose, onSuccess }: St
   const handleSubmit = async (values: any) => {
     try {
       // Calculate status based on quantity and reorder point
-      let status: 'In Stock' | 'Out of Stock' | 'Critical Low'
+      let status: Stock['status']
       if (values.quantity <= 0) {
         status = 'Out of Stock'
       } else if (values.quantity <= values.reorderPoint) {

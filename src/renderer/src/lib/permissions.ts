@@ -4,6 +4,7 @@ export const permissionOptions = [
   { label: 'Create Stocks', value: 'stocks:create' },
   { label: 'Edit Stocks', value: 'stocks:edit' },
   { label: 'Delete Stocks', value: 'stocks:delete' },
+  { label: 'Archive Stocks', value: 'stocks:archive' },
 
   // Category permissions
   { label: 'View Categories', value: 'categories:view' },

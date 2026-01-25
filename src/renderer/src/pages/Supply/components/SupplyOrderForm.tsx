@@ -47,7 +47,7 @@ export default function SupplyOrderForm({ open, onClose, mode, selected }: Suppl
 
   const { user } = useAuthStore()
   const { suppliers, fetchSuppliers } = useSupplierStore()
-  const { stocks, fetchStocks } = useStockStore()
+  const { stocks, fetchActiveStocks } = useStockStore()
   const { categories, fetchCategories } = useCategoryStore()
   const {
     createOrderWithItems,
@@ -72,14 +72,14 @@ export default function SupplyOrderForm({ open, onClose, mode, selected }: Suppl
   const currentSupplierId = Form.useWatch('supplierId', orderForm)
   const displayItems = isAddMode ? tempItems : orderItems
   const supplierStocks = stocks.filter(
-    (s) => currentSupplierId && s.supplierId === currentSupplierId
+    (s) => currentSupplierId && s.supplierId === currentSupplierId && s.status !== 'Archived'
   )
 
   useEffect(() => {
     fetchSuppliers()
-    fetchStocks()
+    fetchActiveStocks()
     fetchCategories()
-  }, [fetchSuppliers, fetchStocks, fetchCategories])
+  }, [fetchSuppliers, fetchActiveStocks, fetchCategories])
 
   useEffect(() => {
     if (!open) return

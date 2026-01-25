@@ -55,7 +55,7 @@ const { Option } = Select
 
 export default function Dashboard() {
   const { user } = useAuthStore()
-  const { stocks, fetchStocks } = useStockStore()
+  const { stocks, fetchActiveStocks } = useStockStore()
   const { orders, fetchOrders } = useSupplyOrderStore()
   const { transactions, fetchTransactions } = useTransactionStore()
   const { logs, fetchLogs } = useLogStore()
@@ -91,11 +91,11 @@ export default function Dashboard() {
 
   // Fetch all necessary data when component mounts
   useEffect(() => {
-    fetchStocks()
+    fetchActiveStocks()
     fetchOrders()
     fetchTransactions()
     fetchLogs()
-  }, [fetchStocks, fetchOrders, fetchTransactions, fetchLogs])
+  }, [fetchActiveStocks, fetchOrders, fetchTransactions, fetchLogs])
 
   // Calculate stock statistics when stocks change
   useEffect(() => {
@@ -553,7 +553,9 @@ export default function Dashboard() {
                         ? 'success'
                         : selectedStock.status === 'Critical Low'
                           ? 'warning'
-                          : 'error'
+                          : selectedStock.status === 'Archived'
+                            ? 'default'
+                            : 'error'
                     }
                   >
                     {selectedStock.status}

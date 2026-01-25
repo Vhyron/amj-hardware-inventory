@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
-import { EditOutlined, DeleteOutlined } from '@ant-design/icons'
-import { Tag } from 'antd'
+import { EditOutlined, InboxOutlined } from '@ant-design/icons'
+import { App as AntdApp, Tag, notification } from 'antd'
 import SearchInput from '@/renderer/src/components/SearchInput'
 import CategoryDropdown from '@/renderer/src/components/CategoryDropdown'
 import TableComponent, { generateColumns, TableActionOption } from '@/renderer/src/components/Table'
@@ -20,8 +20,9 @@ interface StocksTabProps {
  */
 export default function StocksTab({ onStockAction }: StocksTabProps) {
   const { user } = useAuthStore()
-  const { stocks, loading, fetchStocks } = useStockStore()
+  const { stocks, loading, fetchActiveStocks, archiveStock } = useStockStore()
   const { fetchSuppliers } = useSupplierStore()
+  const { modal } = AntdApp.useApp()
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedCategory, setSelectedCategory] = useState<string>('All Categories')
   const [pagination, setPagination] = useState({
@@ -39,9 +40,9 @@ export default function StocksTab({ onStockAction }: StocksTabProps) {
 
   // Fetch data when component mounts
   useEffect(() => {
-    fetchStocks()
+    fetchActiveStocks()
     fetchSuppliers()
-  }, [fetchStocks, fetchSuppliers])
+  }, [fetchActiveStocks, fetchSuppliers])
 
   // Generate options for actions column
   const getOptions = () => {
@@ -55,11 +56,11 @@ export default function StocksTab({ onStockAction }: StocksTabProps) {
       })
     }
 
-    if (hasPermission(user?.permissions, 'stocks:delete')) {
+    if (hasPermission(user?.permissions, 'stocks:archive')) {
       options.push({
-        label: 'Delete',
-        key: 'delete',
-        icon: <DeleteOutlined style={{ color: '#ff4d4f' }} />
+        label: 'Archive',
+        key: 'archive',
+        icon: <InboxOutlined style={{ color: '#8c8c8c' }} />
       })
     }
 
@@ -84,11 +85,40 @@ export default function StocksTab({ onStockAction }: StocksTabProps) {
       .map((stock) => ({ ...stock, key: stock.id })) // Add key for Table component
   }, [stocks, searchTerm, selectedCategory])
 
-  // Handle stock action (view, edit, delete)
+  const handleArchive = (record: Stock) => {
+    modal.confirm({
+      title: 'Archive Stock',
+      content: `Archive ${record.name}? Archived stocks move to the Archived tab and stay out of active workflows.`,
+      okText: 'Archive',
+      okType: 'danger',
+      cancelText: 'Cancel',
+      async onOk() {
+        const success = await archiveStock(record.id)
+        if (success) {
+          notification.success({
+            message: 'Stock archived',
+            description: `${record.name} is now archived.`
+          })
+        } else {
+          const { error } = useStockStore.getState()
+          notification.error({
+            message: 'Failed to archive stock',
+            description: error || 'Please try again.'
+          })
+        }
+      }
+    })
+  }
+
+  // Handle stock action (view, edit, archive)
   const handleStockAction = (record: Stock, actionType: string | number) => {
     if (typeof actionType === 'string') {
       if (actionType === 'edit' && !hasPermission(user?.permissions, 'stocks:edit')) return
-      if (actionType === 'delete' && !hasPermission(user?.permissions, 'stocks:delete')) return
+      if (actionType === 'archive') {
+        if (!hasPermission(user?.permissions, 'stocks:archive')) return
+        handleArchive(record)
+        return
+      }
 
       onStockAction(record, actionType as FormMode)
     }
@@ -145,7 +175,14 @@ export default function StocksTab({ onStockAction }: StocksTabProps) {
     const statusColumnIndex = baseColumns.findIndex((col) => col.key === 'status')
     if (statusColumnIndex !== -1) {
       baseColumns[statusColumnIndex].render = (status: string) => {
-        const color = status === 'In Stock' ? 'green' : status === 'Out of Stock' ? 'red' : 'orange'
+        const color =
+          status === 'In Stock'
+            ? 'green'
+            : status === 'Out of Stock'
+              ? 'red'
+              : status === 'Critical Low'
+                ? 'orange'
+                : 'default'
         return <Tag color={color}>{status}</Tag>
       }
     }

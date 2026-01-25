@@ -5,6 +5,14 @@ export class StocksService {
     return stocksRepo.getAllStocks()
   }
 
+  getActiveStocks() {
+    return stocksRepo.getActiveStocks()
+  }
+
+  getArchivedStocks() {
+    return stocksRepo.getArchivedStocks()
+  }
+
   getStockById(id: string) {
     return stocksRepo.getById(id)
   }
@@ -23,5 +31,13 @@ export class StocksService {
 
   deleteStock(id: string): boolean {
     return stocksRepo.deleteStock(id)
+  }
+
+  archiveStock(id: string): boolean {
+    return stocksRepo.archiveStock(id)
+  }
+
+  restoreStock(id: string, status: string): boolean {
+    return stocksRepo.restoreStock(id, status)
   }
 }

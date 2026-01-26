@@ -34,13 +34,17 @@ try {
     // Stocks IPC methods
     stocks: {
       getAll: () => ipcRenderer.invoke('stocks:getAll'),
+      getActive: () => ipcRenderer.invoke('stocks:getActive'),
+      getArchived: () => ipcRenderer.invoke('stocks:getArchived'),
       getById: (id: string) =>
         ipcRenderer.invoke('stocks:getById', id),
       getByName: (name: string, excludeId?: string) =>
         ipcRenderer.invoke('stocks:getByName', name, excludeId),
       add: (stock: any) => ipcRenderer.invoke('stocks:add', stock),
       update: (stock: any) => ipcRenderer.invoke('stocks:update', stock),
-      delete: (id: string) => ipcRenderer.invoke('stocks:delete', id)
+      delete: (id: string) => ipcRenderer.invoke('stocks:delete', id),
+      archive: (id: string) => ipcRenderer.invoke('stocks:archive', id),
+      restore: (id: string, status: string) => ipcRenderer.invoke('stocks:restore', id, status)
     },
     // Categories IPC methods
     categories: {

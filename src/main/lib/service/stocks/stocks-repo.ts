@@ -106,6 +106,22 @@ export class StocksRepository {
     return stocks
   }
 
+  getActiveStocks(): Stock[] {
+    const stmt = this.db.prepare(
+      "SELECT * FROM stocks WHERE status IS NULL OR status != 'Archived'"
+    )
+    const stocks = stmt.all() as unknown as Stock[]
+    assert(Array.isArray(stocks), 'Expected active stocks to be an array')
+    return stocks
+  }
+
+  getArchivedStocks(): Stock[] {
+    const stmt = this.db.prepare("SELECT * FROM stocks WHERE status = 'Archived'")
+    const stocks = stmt.all() as unknown as Stock[]
+    assert(Array.isArray(stocks), 'Expected archived stocks to be an array')
+    return stocks
+  }
+
   updateStock(stock: Stock): boolean {
     try {
       assert(stock.id, 'ID is required for updating stock')
@@ -147,6 +163,31 @@ export class StocksRepository {
       return result.changes > 0
     } catch (error) {
       console.log('Error deleteStock: ', error)
+      return false
+    }
+  }
+
+  archiveStock(id: string): boolean {
+    try {
+      assert(id, 'ID is required for archiving stock')
+      const stmt = this.db.prepare("UPDATE stocks SET status = 'Archived' WHERE id = ?")
+      const result = stmt.run(id)
+      return result.changes > 0
+    } catch (error) {
+      console.log('Error archiveStock: ', error)
+      return false
+    }
+  }
+
+  restoreStock(id: string, status: string): boolean {
+    try {
+      assert(id, 'ID is required for restoring stock')
+      assert(status, 'Status is required for restoring stock')
+      const stmt = this.db.prepare('UPDATE stocks SET status = ? WHERE id = ?')
+      const result = stmt.run(status, id)
+      return result.changes > 0
+    } catch (error) {
+      console.log('Error restoreStock: ', error)
       return false
     }
   }

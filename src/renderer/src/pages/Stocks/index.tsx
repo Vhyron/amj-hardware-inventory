@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Typography } from 'antd'
 import PageTabs, { TabItem } from '@/renderer/src/components/PageTabs'
 import StocksTab from './tabs/StocksTab'
+import ArchivedTab from './tabs/ArchivedTab'
 import CategoriesTab from './tabs/CategoriesTab'
 import StocksForm from './components/StocksForm'
 import CategoriesForm from './components/CategoriesForm'
@@ -100,6 +101,10 @@ export default function Stocks() {
         onClick: handleAddStock,
         disabled: !hasPermission(user?.permissions, 'stocks:create')
       }
+    },
+    {
+      label: 'Archived',
+      content: <ArchivedTab onStockAction={handleStockAction} />
     },
     {
       label: 'Categories',

@@ -26,7 +26,7 @@ export interface Category {
 }
 
 // Stock status types
-export type StockStatus = 'In Stock' | 'Out of Stock' | 'Critical Low'
+export type StockStatus = 'In Stock' | 'Out of Stock' | 'Critical Low' | 'Archived'
 
 // All available stock categories
 export const categories = [

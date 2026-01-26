@@ -2,7 +2,7 @@ import './assets/main.css'
 
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
-import { ConfigProvider, theme } from 'antd'
+import { App as AntdApp, ConfigProvider, theme } from 'antd'
 import App from './App'
 
 // Add a style element to fix overflow issues
@@ -30,7 +30,9 @@ createRoot(document.getElementById('root')!).render(
         // }
       }}
     >
-      <App />
+      <AntdApp>
+        <App />
+      </AntdApp>
     </ConfigProvider>
   </StrictMode>
 )

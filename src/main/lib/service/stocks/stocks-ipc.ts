@@ -6,11 +6,31 @@ const stocksService = new StocksService()
 export function setupStocksIPC() {
   ipcMain.handle('stocks:getAll', async () => {
     try {
-      const stocks = await stocksService.getStocks()
+      const stocks = await stocksService.getActiveStocks()
       return { success: true, stocks }
     } catch (error) {
       console.error('Error fetching stocks:', error)
       return { success: false, message: 'Failed to fetch stocks' }
+    }
+  })
+
+  ipcMain.handle('stocks:getActive', async () => {
+    try {
+      const stocks = await stocksService.getActiveStocks()
+      return { success: true, stocks }
+    } catch (error) {
+      console.error('Error fetching active stocks:', error)
+      return { success: false, message: 'Failed to fetch active stocks' }
+    }
+  })
+
+  ipcMain.handle('stocks:getArchived', async () => {
+    try {
+      const stocks = await stocksService.getArchivedStocks()
+      return { success: true, stocks }
+    } catch (error) {
+      console.error('Error fetching archived stocks:', error)
+      return { success: false, message: 'Failed to fetch archived stocks' }
     }
   })
 
@@ -86,6 +106,32 @@ export function setupStocksIPC() {
     } catch (error) {
       console.error('Error deleting stock:', error)
       return { success: false, message: 'Failed to delete stock' }
+    }
+  })
+
+  ipcMain.handle('stocks:archive', async (_, id: string) => {
+    try {
+      const success = await stocksService.archiveStock(id)
+      if (!success) {
+        return { success: false, message: 'Failed to archive stock' }
+      }
+      return { success: true }
+    } catch (error) {
+      console.error('Error archiving stock:', error)
+      return { success: false, message: 'Failed to archive stock' }
+    }
+  })
+
+  ipcMain.handle('stocks:restore', async (_, id: string, status: string) => {
+    try {
+      const success = await stocksService.restoreStock(id, status)
+      if (!success) {
+        return { success: false, message: 'Failed to restore stock' }
+      }
+      return { success: true }
+    } catch (error) {
+      console.error('Error restoring stock:', error)
+      return { success: false, message: 'Failed to restore stock' }
     }
   })
 }

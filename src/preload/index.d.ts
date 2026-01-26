@@ -1,4 +1,4 @@
-import { Stock, Category } from '@/renderer/src/pages/Stocks/types'
+import { Stock, Category, StockStatus } from '@/renderer/src/pages/Stocks/types'
 import { User } from '@/renderer/src/store/userStore'
 import { ElectronAPI } from '@electron-toolkit/preload'
 import { Supplier, SupplyOrder, OrderItem } from '@/renderer/src/pages/Supply/types'
@@ -62,6 +62,14 @@ declare global {
           success: boolean
           stocks: Stock[]
         }>
+        getActive: () => Promise<{
+          success: boolean
+          stocks: Stock[]
+        }>
+        getArchived: () => Promise<{
+          success: boolean
+          stocks: Stock[]
+        }>
         getById: (id: string) => Promise<{  success: boolean; stock: Stock | null; message?: string }>
         getByName: (name: string, excludeId?: string) => Promise<boolean>
         add: (
@@ -69,6 +77,8 @@ declare global {
         ) => Promise<{ success: boolean; stockId?: number | null; message?: string }>
         update: (stock: Stock) => Promise<{ success: boolean; message?: string }>
         delete: (id: string) => Promise<{ success: boolean; message?: string }>
+        archive: (id: string) => Promise<{ success: boolean; message?: string }>
+        restore: (id: string, status: StockStatus) => Promise<{ success: boolean; message?: string }>
       }
       // Categories IPC methods
       categories: {

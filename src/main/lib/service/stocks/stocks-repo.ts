@@ -37,6 +37,9 @@ export class StocksRepository {
         'INSERT INTO stocks (id, name, description, category, quantity, unit, unitPrice, costPrice, supplierId, location, sku, status, reorderPoint) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)'
       )
 
+      const supplierId =
+        stock.supplierId && stock.supplierId.trim() !== '' ? stock.supplierId : null
+
       const info = stmt.run(
         stock.id,
         stock.name,
@@ -46,7 +49,7 @@ export class StocksRepository {
         stock.unit,
         stock.unitPrice,
         stock.costPrice,
-        stock.supplierId,
+        supplierId,
         stock.location,
         stock.sku,
         stock.status,
@@ -67,18 +70,18 @@ export class StocksRepository {
       const query = 'SELECT * FROM stocks WHERE id = ?'
       const stmt = this.db.prepare(query)
       const result = stmt.get(id) as Stock | null
-      
+
       return result
     } catch (error: any) {
       console.error('Error in getById:', error)
-      throw new Error(`Failed to get stock by id: ${error.message}`);
+      throw new Error(`Failed to get stock by id: ${error.message}`)
     }
   }
 
   checkStockNameExists(name: string, excludeId?: string): boolean {
     try {
       let query = 'SELECT COUNT(*) as count FROM stocks WHERE LOWER(name) = LOWER(?)'
-      let params = [name]
+      const params = [name]
 
       // If we're updating an existing stock, exclude its ID from the check
       if (excludeId) {
@@ -88,11 +91,11 @@ export class StocksRepository {
 
       const stmt = this.db.prepare(query)
       const result = stmt.get(...params) as { count: number }
-      
+
       return result && result.count > 0
     } catch (error: any) {
       console.error('Error in checkStockNameExists:', error)
-      throw new Error(`Failed to check if stock name exists: ${error.message}`);
+      throw new Error(`Failed to check if stock name exists: ${error.message}`)
     }
   }
 
@@ -109,6 +112,10 @@ export class StocksRepository {
       const stmt = this.db.prepare(
         'UPDATE stocks SET name = ?, description = ?, category = ?, quantity = ?, unit = ?, unitPrice = ?, costPrice = ?, supplierId = ?, location = ?, sku = ?, status = ?, reorderPoint = ? WHERE id = ?'
       )
+
+      const supplierId =
+        stock.supplierId && stock.supplierId.trim() !== '' ? stock.supplierId : null
+
       const result = stmt.run(
         stock.name,
         stock.description,
@@ -117,15 +124,13 @@ export class StocksRepository {
         stock.unit,
         stock.unitPrice,
         stock.costPrice,
-        stock.supplierId,
+        supplierId,
         stock.location,
         stock.sku,
         stock.status,
         stock.reorderPoint,
         stock.id
       )
-
-      console.log(result.changes)
 
       return result.changes > 0
     } catch (error) {

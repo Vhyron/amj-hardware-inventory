@@ -239,15 +239,17 @@ export const useTransactionStore = create<TransactionStore>()(
     addTransactionItem: async (item: Omit<TransactionItem, 'id' | 'createdAt' | 'updatedAt'>) => {
       set({ loading: true, error: null })
       try {
-        // **FIX: Check if item already exists in the transaction**
+        // **SMART MERGE: Check if item already exists with same stockId AND unitPrice**
         const existingItems = get().currentItems
         const existingItem = existingItems.find(
           (existing) =>
-            existing.transactionId === item.transactionId && existing.stockId === item.stockId
+            existing.transactionId === item.transactionId &&
+            existing.stockId === item.stockId &&
+            existing.unitPrice === item.unitPrice // ← Also check price
         )
 
         if (existingItem) {
-          // **Update existing item instead of creating a new one**
+          // **MERGE: Same item, same price (same batch)**
           const updatedQuantity = existingItem.quantity + item.quantity
 
           // Check stock availability for completed transactions
@@ -268,8 +270,8 @@ export const useTransactionStore = create<TransactionStore>()(
           }
 
           const updateSuccess = await get().updateTransactionItem(existingItem.id, {
-            quantity: updatedQuantity,
-            unitPrice: item.unitPrice // Update price if provided
+            quantity: updatedQuantity
+            // Don't update price - it's the same
           })
 
           if (updateSuccess) {
@@ -284,7 +286,7 @@ export const useTransactionStore = create<TransactionStore>()(
                 action: 'update',
                 entityType: 'transaction_item',
                 entityId: existingItem.id,
-                details: `Updated existing transaction item: ${stock?.name || 'Unknown'} (${existingItem.quantity} + ${item.quantity} = ${updatedQuantity} ${item.unit})`,
+                details: `Merged item quantity: ${stock?.name || 'Unknown'} (${existingItem.quantity} + ${item.quantity} = ${updatedQuantity} ${item.unit} @ ₱${item.unitPrice.toFixed(2)})`,
                 timestamp: new Date().toISOString()
               }
               useLogStore.getState().createLog(logEntry)
@@ -295,7 +297,7 @@ export const useTransactionStore = create<TransactionStore>()(
           }
         }
 
-        // **Item doesn't exist, create new one**
+        // **ADD NEW: Item doesn't exist OR different price (different batch)**
         const currentTransaction = get().currentTransaction
         if (currentTransaction?.status === 'completed') {
           const { stocks } = useStockStore.getState()

@@ -277,18 +277,20 @@ export const useSupplyOrderStore = create<SupplyOrderState>((set, get) => ({
   createOrderItem: async (item) => {
     set({ loading: true, error: null })
     try {
-      // **FIX: Check if item already exists in the order**
+      // **SMART MERGE: Check if item already exists with same stockId AND unitPrice**
       const existingItems = get().orderItems
       const existingItem = existingItems.find(
-        (existing) => existing.orderId === item.orderId && existing.stockId === item.stockId
+        (existing) =>
+          existing.orderId === item.orderId &&
+          existing.stockId === item.stockId &&
+          existing.unitPrice === item.unitPrice // ← Also check price
       )
 
       if (existingItem) {
-        // **Update existing item instead of creating a new one**
+        // **MERGE: Same item, same price (same batch)**
         const updatedQuantity = existingItem.quantity + item.quantity
         const updateSuccess = await get().updateOrderItem(existingItem.id, {
-          quantity: updatedQuantity,
-          unitPrice: item.unitPrice // Update price if provided
+          quantity: updatedQuantity
         })
 
         if (updateSuccess) {
@@ -301,7 +303,7 @@ export const useSupplyOrderStore = create<SupplyOrderState>((set, get) => ({
               action: 'update',
               entityType: 'orderItem',
               entityId: existingItem.id,
-              details: `Updated existing order item: ${item.name} (${existingItem.quantity} + ${item.quantity} = ${updatedQuantity} ${item.unit})`,
+              details: `Merged item quantity: ${item.name} (${existingItem.quantity} + ${item.quantity} = ${updatedQuantity} ${item.unit} @ ₱${item.unitPrice.toFixed(2)})`,
               timestamp: new Date().toISOString()
             }
             useLogStore.getState().createLog(logEntry)
@@ -312,7 +314,7 @@ export const useSupplyOrderStore = create<SupplyOrderState>((set, get) => ({
         }
       }
 
-      // **Item doesn't exist, create new one**
+      // **ADD NEW: Item doesn't exist OR different price (different batch)**
       const response = await window.context.supplyOrders.addItem(item)
       if (response.success && response.itemId) {
         const newItem = {
@@ -498,7 +500,6 @@ export const useSupplyOrderStore = create<SupplyOrderState>((set, get) => ({
           get().updateOrder(get().currentOrder!.id, { totalCost })
         }
 
-        // **ADDED: Activity logging for order item updates**
         const currentUser = useAuthStore.getState().user
         if (currentUser && oldItem) {
           const itemName = oldItem.name || 'Unknown'

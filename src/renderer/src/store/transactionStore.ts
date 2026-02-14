@@ -214,12 +214,12 @@ export const useTransactionStore = create<TransactionStore>()(
                       quantity: newQuantity,
                       status: newStatus
                     })
+
+                    await fetchStocks()
                   }
                 }
               }
             }
-
-            await fetchStocks()
           }
 
           return response.transactionId
@@ -239,15 +239,73 @@ export const useTransactionStore = create<TransactionStore>()(
     addTransactionItem: async (item: Omit<TransactionItem, 'id' | 'createdAt' | 'updatedAt'>) => {
       set({ loading: true, error: null })
       try {
-        const currentTransaction = get().currentTransaction
+        // **SMART MERGE: Check if item already exists with same stockId AND unitPrice**
+        const existingItems = get().currentItems
+        const existingItem = existingItems.find(
+          (existing) =>
+            existing.transactionId === item.transactionId &&
+            existing.stockId === item.stockId &&
+            existing.unitPrice === item.unitPrice // ← Also check price
+        )
 
+        if (existingItem) {
+          // **MERGE: Same item, same price (same batch)**
+          const updatedQuantity = existingItem.quantity + item.quantity
+
+          // Check stock availability for completed transactions
+          const currentTransaction = get().currentTransaction
+          if (currentTransaction?.status === 'completed') {
+            const { stocks } = useStockStore.getState()
+            const stock = stocks.find((s) => s.id === item.stockId)
+
+            if (stock) {
+              const additionalQuantityNeeded = item.quantity
+              if (stock.quantity < additionalQuantityNeeded) {
+                set({
+                  error: `Insufficient stock: ${stock.name} (need ${additionalQuantityNeeded} more, only ${stock.quantity} available)`
+                })
+                return null
+              }
+            }
+          }
+
+          const updateSuccess = await get().updateTransactionItem(existingItem.id, {
+            quantity: updatedQuantity
+            // Don't update price - it's the same
+          })
+
+          if (updateSuccess) {
+            const currentUser = useAuthStore.getState().user
+            if (currentUser) {
+              const { stocks } = useStockStore.getState()
+              const stock = stocks.find((s) => s.id === item.stockId)
+              const logEntry = {
+                id: generatePrefixedUUID('log'),
+                userId: currentUser.id,
+                username: currentUser.username,
+                action: 'update',
+                entityType: 'transaction_item',
+                entityId: existingItem.id,
+                details: `Merged item quantity: ${stock?.name || 'Unknown'} (${existingItem.quantity} + ${item.quantity} = ${updatedQuantity} ${item.unit} @ ₱${item.unitPrice.toFixed(2)})`,
+                timestamp: new Date().toISOString()
+              }
+              useLogStore.getState().createLog(logEntry)
+            }
+            return existingItem.id
+          } else {
+            return null
+          }
+        }
+
+        // **ADD NEW: Item doesn't exist OR different price (different batch)**
+        const currentTransaction = get().currentTransaction
         if (currentTransaction?.status === 'completed') {
           const { stocks } = useStockStore.getState()
           const stock = stocks.find((s) => s.id === item.stockId)
 
           if (stock && stock.quantity < item.quantity) {
             set({
-              error: `Insufficient stock for ${stock.name}: need ${item.quantity}, only ${stock.quantity} available`
+              error: `Insufficient stock: ${stock.name} (need ${item.quantity}, only ${stock.quantity} available)`
             })
             return null
           }
@@ -255,10 +313,9 @@ export const useTransactionStore = create<TransactionStore>()(
 
         const response = await window.context.transactions.addItem(item)
         if (response.success && response.itemId) {
-          const stockResponse = window.context.stocks
-            ? await window.context.stocks.getById(item.stockId)
-            : null
-          const stockName = stockResponse?.stock?.name || 'Unknown Item'
+          const { stocks } = useStockStore.getState()
+          const stock = stocks.find((s) => s.id === item.stockId)
+          const stockName = stock?.name || 'Unknown'
 
           const newItem = {
             ...item,
@@ -272,12 +329,10 @@ export const useTransactionStore = create<TransactionStore>()(
             currentItems: [...state.currentItems, newItem]
           }))
 
-          if (get().currentTransaction && item.transactionId === get().currentTransaction!.id) {
-            const currentTotal = get().currentTransaction?.totalAmount || 0
-            const itemTotal = item.quantity * item.unitPrice
-            await get().updateTransaction(item.transactionId, {
-              totalAmount: currentTotal + itemTotal
-            })
+          if (get().currentTransaction) {
+            const totalAmount =
+              get().currentTransaction!.totalAmount + item.quantity * item.unitPrice
+            get().updateTransaction(get().currentTransaction!.id, { totalAmount })
           }
 
           const currentUser = useAuthStore.getState().user
@@ -289,35 +344,29 @@ export const useTransactionStore = create<TransactionStore>()(
               action: 'create',
               entityType: 'transaction_item',
               entityId: response.itemId,
-              details: `Added item to transaction ${item.transactionId} | Product: ${stockName} | Qty: ${item.quantity} ${item.unit} | Price: ₱${item.unitPrice.toFixed(2)}`,
+              details: `Added new item to transaction ${item.transactionId} | Product: ${stockName} | Qty: ${item.quantity} ${item.unit} | Price: ₱${item.unitPrice.toFixed(2)}`,
               timestamp: new Date().toISOString()
             }
             useLogStore.getState().createLog(logEntry)
           }
 
-          const currentTransaction = get().currentTransaction
-          if (currentTransaction?.status === 'completed') {
-            const { stocks, updateStock, fetchStocks } = useStockStore.getState()
-            const stockToUpdate = stocks.find((s) => s.id === item.stockId)
+          if (currentTransaction?.status === 'completed' && stock) {
+            const newQuantity = Math.max(0, stock.quantity - item.quantity)
+            let newStatus: StockStatus = 'In Stock'
 
-            if (stockToUpdate) {
-              const newQuantity = Math.max(0, stockToUpdate.quantity - item.quantity)
-              let newStatus: StockStatus = 'In Stock'
-
-              if (newQuantity <= 0) {
-                newStatus = 'Out of Stock'
-              } else if (newQuantity <= (stockToUpdate.reorderPoint || 0)) {
-                newStatus = 'Critical Low'
-              }
-
-              await updateStock({
-                ...stockToUpdate,
-                quantity: newQuantity,
-                status: newStatus
-              })
-
-              await fetchStocks()
+            if (newQuantity <= 0) {
+              newStatus = 'Out of Stock'
+            } else if (newQuantity <= (stock.reorderPoint || 0)) {
+              newStatus = 'Critical Low'
             }
+
+            await useStockStore.getState().updateStock({
+              ...stock,
+              quantity: newQuantity,
+              status: newStatus
+            })
+
+            await useStockStore.getState().fetchStocks()
           }
 
           return response.itemId
@@ -334,121 +383,20 @@ export const useTransactionStore = create<TransactionStore>()(
       }
     },
 
-    updateStockQuantities: async (
-      transactionId: string,
-      oldStatus?: string,
-      newStatus?: string
-    ) => {
-      try {
-        const itemsResponse = await window.context.transactions.getItems(transactionId)
-        const items = itemsResponse.success && itemsResponse.items ? itemsResponse.items : []
-
-        if (items.length === 0) {
-          return true
-        }
-
-        let multiplier = 0
-
-       
-        if (oldStatus === 'pending' && newStatus === 'completed') {
-          multiplier = -1
-        }
-        else if (oldStatus === 'pending' && newStatus === 'cancelled') {
-          multiplier = 0
-        }
-        else if (oldStatus === 'completed' && newStatus === 'cancelled') {
-          multiplier = 1
-        }
-        else if (oldStatus === 'completed' && newStatus === 'pending') {
-          multiplier = 1
-        }
-        else if (oldStatus === 'cancelled' && newStatus === 'pending') {
-          multiplier = 0
-        }
-        else if (oldStatus === 'cancelled' && newStatus === 'completed') {
-          multiplier = -1
-        }
-
-        if (multiplier !== 0) {
-          const { stocks, updateStock, fetchStocks } = useStockStore.getState()
-
-          for (const item of items) {
-            const stockToUpdate = stocks.find((s) => s.id === item.stockId)
-
-            if (stockToUpdate) {
-              const newQuantity = Math.max(0, stockToUpdate.quantity + item.quantity * multiplier)
-              let newStatus: StockStatus = 'In Stock'
-
-              if (newQuantity <= 0) {
-                newStatus = 'Out of Stock'
-              } else if (newQuantity <= (stockToUpdate.reorderPoint || 0)) {
-                newStatus = 'Critical Low'
-              }
-
-              await updateStock({
-                ...stockToUpdate,
-                quantity: newQuantity,
-                status: newStatus
-              })
-            }
-          }
-
-          await fetchStocks()
-        }
-
-        return true
-      } catch (error) {
-        console.error('Error updating stock quantities:', error)
-        return false
-      }
-    },
-
     updateTransaction: async (id: string, transaction: Partial<Transaction>) => {
       set({ loading: true, error: null })
       try {
-        const currentTx = get().currentTransaction
-        const oldStatus = currentTx?.status
+        const oldTransaction =
+          get().transactions.find((t) => t.id === id) || get().currentTransaction
+        const oldStatus = oldTransaction?.status
         const newStatus = transaction.status
 
-        if ((oldStatus === 'pending' || oldStatus === 'cancelled') && newStatus === 'completed') {
-          const itemsResponse = await window.context.transactions.getItems(id)
-          const items = itemsResponse.success && itemsResponse.items ? itemsResponse.items : []
-
-          const { stocks } = useStockStore.getState()
-          const insufficientStock: Array<{ name: string; required: number; available: number }> = []
-
-          for (const item of items) {
-            const stock = stocks.find((s) => s.id === item.stockId)
-            if (stock && stock.quantity < item.quantity) {
-              insufficientStock.push({
-                name: stock.name,
-                required: item.quantity,
-                available: stock.quantity
-              })
-            }
-          }
-
-          if (insufficientStock.length > 0) {
-            const errorMessages = insufficientStock.map(
-              (item) => `${item.name}: need ${item.required}, only ${item.available} available`
-            )
-            set({
-              error: `Insufficient stock to complete transaction:\n${errorMessages.join('\n')}`
-            })
-            return false
-          }
+        if (oldStatus !== newStatus && (oldStatus === 'completed' || newStatus === 'completed')) {
+          await get().updateStockQuantities(id, oldStatus, newStatus)
         }
 
         const response = await window.context.transactions.update(id, transaction)
         if (response.success) {
-          if (oldStatus !== newStatus && newStatus) {
-            await get().updateStockQuantities(id, oldStatus, newStatus)
-          }
-
-          const existingTransaction =
-            get().transactions.find((t) => t.id === id) || get().currentTransaction
-          const updatedTransaction = { ...existingTransaction, ...transaction }
-
           set((state) => ({
             transactions: state.transactions.map((t) =>
               t.id === id ? { ...t, ...transaction, updatedAt: new Date().toISOString() } : t
@@ -464,15 +412,15 @@ export const useTransactionStore = create<TransactionStore>()(
           }))
 
           const currentUser = useAuthStore.getState().user
-          if (currentUser && updatedTransaction) {
+          if (currentUser && oldTransaction) {
             let details = `Updated transaction ${id}`
 
-            if (transaction.status && oldStatus !== newStatus) {
+            if (transaction.status && oldStatus !== transaction.status) {
               details += ` | Status: ${oldStatus} → ${transaction.status}`
             }
 
             if (transaction.totalAmount !== undefined) {
-              details += ` | Amount: ₱${transaction.totalAmount.toFixed(2)}`
+              details += ` | Total: ₱${transaction.totalAmount.toFixed(2)}`
             }
 
             if (transaction.customerName) {
@@ -506,29 +454,57 @@ export const useTransactionStore = create<TransactionStore>()(
       }
     },
 
+    updateStockQuantities: async (
+      transactionId: string,
+      oldStatus?: string,
+      newStatus?: string
+    ): Promise<boolean> => {
+      try {
+        const items = await get().fetchTransactionItems(transactionId)
+        if (!items || items.length === 0) return true
+
+        const { stocks, updateStock, fetchStocks } = useStockStore.getState()
+        await fetchStocks()
+
+        for (const item of items) {
+          const stock = stocks.find((s) => s.id === item.stockId)
+          if (!stock) continue
+
+          let newQuantity = stock.quantity
+
+          if (oldStatus === 'completed' && newStatus !== 'completed') {
+            newQuantity = stock.quantity + item.quantity
+          } else if (oldStatus !== 'completed' && newStatus === 'completed') {
+            newQuantity = Math.max(0, stock.quantity - item.quantity)
+          }
+
+          let newStockStatus: StockStatus = 'In Stock'
+          if (newQuantity <= 0) {
+            newStockStatus = 'Out of Stock'
+          } else if (newQuantity <= (stock.reorderPoint || 0)) {
+            newStockStatus = 'Critical Low'
+          }
+
+          await updateStock({
+            ...stock,
+            quantity: newQuantity,
+            status: newStockStatus
+          })
+        }
+
+        await fetchStocks()
+        return true
+      } catch (error) {
+        console.error('Failed to update stock quantities:', error)
+        return false
+      }
+    },
+
     updateTransactionItem: async (id: string, item: Partial<TransactionItem>) => {
       set({ loading: true, error: null })
       try {
         const currentTransaction = get().currentTransaction
         const oldItem = get().currentItems.find((i) => i.id === id)
-
-        if (
-          currentTransaction?.status === 'completed' &&
-          oldItem &&
-          item.quantity !== undefined &&
-          item.quantity > oldItem.quantity
-        ) {
-          const quantityIncrease = item.quantity - oldItem.quantity
-          const { stocks } = useStockStore.getState()
-          const stock = stocks.find((s) => s.id === oldItem.stockId)
-
-          if (stock && stock.quantity < quantityIncrease) {
-            set({
-              error: `Insufficient stock for ${stock.name}: need ${quantityIncrease} more, only ${stock.quantity} available`
-            })
-            return false
-          }
-        }
 
         const response = await window.context.transactions.updateItem(id, item)
         if (response.success) {

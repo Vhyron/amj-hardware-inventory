@@ -327,19 +327,60 @@ export default function TransactionForm({ open, onClose, mode, selected }: Trans
         return
       }
 
-      const tempId = `temp-${Date.now()}`
-      const newItem: LocalItem = {
-        tempId,
-        stockId: values.stockId,
-        stockName: stock.name,
-        quantity: values.quantity,
-        unit: values.unit || stock.unit,
-        unitPrice: values.unitPrice
-      }
+      // **SMART MERGE: Check for duplicate items by stockId AND unitPrice**
+      const existingItemIndex = localItems.findIndex(
+        (item) => item.stockId === values.stockId && item.unitPrice === values.unitPrice // ← Also check price
+      )
 
-      setLocalItems([...localItems, newItem])
-      setAddingItem(false)
-      itemForm.resetFields()
+      if (existingItemIndex !== -1) {
+        // **MERGE: Same item, same price (same batch)**
+        const existingItem = localItems[existingItemIndex]
+        const updatedItem: LocalItem = {
+          ...existingItem,
+          quantity: existingItem.quantity + values.quantity
+        }
+
+        const newLocalItems = [...localItems]
+        newLocalItems[existingItemIndex] = updatedItem
+
+        setLocalItems(newLocalItems)
+        setAddingItem(false)
+        itemForm.resetFields()
+
+        notification.success({
+          message: 'Item quantity updated',
+          description: `${existingItem.stockName}: ${existingItem.quantity} + ${values.quantity} = ${updatedItem.quantity} ${existingItem.unit} @ ₱${existingItem.unitPrice.toFixed(2)}`
+        })
+      } else {
+        // **ADD NEW: Different item OR different price (different batch)**
+        const tempId = `temp-${Date.now()}`
+        const newItem: LocalItem = {
+          tempId,
+          stockId: values.stockId,
+          stockName: stock.name,
+          quantity: values.quantity,
+          unit: values.unit || stock.unit,
+          unitPrice: values.unitPrice
+        }
+
+        setLocalItems([...localItems, newItem])
+        setAddingItem(false)
+        itemForm.resetFields()
+
+        // Check if same item but different price
+        const sameItemDifferentPrice = localItems.find(
+          (item) => item.stockId === values.stockId && item.unitPrice !== values.unitPrice
+        )
+
+        if (sameItemDifferentPrice) {
+          notification.info({
+            message: 'Item added as separate entry',
+            description: `Different price detected (₱${sameItemDifferentPrice.unitPrice.toFixed(2)} vs ₱${values.unitPrice.toFixed(2)}). Added as separate line item.`
+          })
+        } else {
+          notification.success({ message: 'Item added' })
+        }
+      }
     } catch (error) {
       console.error('Validation error:', error)
     }
